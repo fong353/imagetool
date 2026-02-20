@@ -18,22 +18,22 @@ const PRESETS = [
 export default function CropSetting({ selectedImage, onProcess }: CropSettingProps) {
   const [mode, setMode] = useState<ProcessMode>("crop");
   
-  // 1. 裁切比例相关 (仅控制虚线框形状，彻底解耦)
+  // 1. 形状控制层 (裁切框/画板比例)
   const [activePreset, setActivePreset] = useState<string>("自定义比例");
   const [customRatioW, setCustomRatioW] = useState<number | ''>(20);
   const [customRatioH, setCustomRatioH] = useState<number | ''>(20);
 
-  // 2. 最终图像物理尺寸相关 (控制导出文件大小)
+  // 2. 物理输出层 (最终导出尺寸)
   const [finalW, setFinalW] = useState<number | ''>(20);
   const [finalH, setFinalH] = useState<number | ''>(20);
   const [isLinked, setIsLinked] = useState<boolean>(true); // 长宽锁
-  const [linkedAspect, setLinkedAspect] = useState<number>(1); // 记忆锁定时的比例
+  const [linkedAspect, setLinkedAspect] = useState<number>(1);
 
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [crop, setCrop] = useState<Crop>({ unit: "%", x: 0, y: 0, width: 100, height: 100 });
   const [imgRef, setImgRef] = useState<HTMLImageElement | null>(null);
 
-  // 获取当前裁切框比例
+  // 获取当前生效的形状比例
   const getCropAspect = () => {
     if (activePreset === "自定义比例") {
       const w = Number(customRatioW) || 1;
@@ -46,7 +46,7 @@ export default function CropSetting({ selectedImage, onProcess }: CropSettingPro
 
   const cropAspect = getCropAspect();
 
-  // 🌟 核心：选中文件时，瞬间读取文件的真实物理尺寸，并初始化锁定比例
+  // 选中图片瞬间：秒读真实物理尺寸，初始化长宽锁
   useEffect(() => {
     if (!selectedImage) {
       setPreviewUrl("");
@@ -56,41 +56,74 @@ export default function CropSetting({ selectedImage, onProcess }: CropSettingPro
     setPreviewUrl(selectedImage.url);
 
     if (selectedImage.size) {
-      // 解析后端传来的尺寸，例如 "21.0 x 29.7 cm"
       const match = selectedImage.size.match(/([\d.]+)\s*x\s*([\d.]+)/);
       if (match) {
         const w = Number(match[1]);
         const h = Number(match[2]);
         setFinalW(w);
         setFinalH(h);
-        setLinkedAspect(w / h); // 记忆该文件的初始物理比例
+        setLinkedAspect(w / h);
+        setCustomRatioW(w);
+        setCustomRatioH(h);
+        setActivePreset("自定义比例");
       }
     }
   }, [selectedImage]);
 
-  // 裁切框贴边计算引擎
+  // 🌟 BUG修复1：使用 DOM 宽高生成裁切框，避免产生 Rust 无法消化的超大像素值
   useEffect(() => {
     if (mode === "crop" && imgRef && cropAspect) {
-      const { naturalWidth, naturalHeight } = imgRef;
-      if (!naturalWidth || !naturalHeight) return;
+      const { width, height } = imgRef;
+      if (!width || !height) return;
 
-      const imageAspect = naturalWidth / naturalHeight;
+      const imageAspect = width / height;
       let newCrop;
 
       if (cropAspect > imageAspect) {
-        newCrop = centerCrop(makeAspectCrop({ unit: '%', width: 100 }, cropAspect, naturalWidth, naturalHeight), naturalWidth, naturalHeight);
+        newCrop = centerCrop(makeAspectCrop({ unit: '%', width: 100 }, cropAspect, width, height), width, height);
       } else {
-        newCrop = centerCrop(makeAspectCrop({ unit: '%', height: 100 }, cropAspect, naturalWidth, naturalHeight), naturalWidth, naturalHeight);
+        newCrop = centerCrop(makeAspectCrop({ unit: '%', height: 100 }, cropAspect, width, height), width, height);
       }
       setCrop(newCrop);
     }
   }, [cropAspect, imgRef, mode]);
 
-  // ======= 最终尺寸联动逻辑 (Photoshop 级) =======
-  
+
+  // ======= UI 与防拉伸逻辑 =======
+
+  const handlePresetClick = (label: string) => {
+    setActivePreset(label);
+    // 🌟 防拉伸联动：当你点选 A4 比例时，虽然尺寸解耦，但强制将下方尺寸换算为 A4 比例，防止图片输出后被挤扁！
+    if (label !== "自定义比例" && finalW) {
+        const preset = PRESETS.find(p => p.label === label)!;
+        const aspect = preset.w / preset.h;
+        setFinalH(Number((Number(finalW) / aspect).toFixed(2)));
+        setLinkedAspect(aspect);
+    }
+  };
+
+  const handleCustomRatioWChange = (val: string) => {
+    const num = val === '' ? '' : Number(val);
+    setCustomRatioW(num);
+    if (isLinked && finalW !== '' && num !== '' && customRatioH !== '') {
+      const aspect = Number(num) / Number(customRatioH);
+      setFinalH(Number((Number(finalW) / aspect).toFixed(2)));
+      setLinkedAspect(aspect);
+    }
+  };
+
+  const handleCustomRatioHChange = (val: string) => {
+    const num = val === '' ? '' : Number(val);
+    setCustomRatioH(num);
+    if (isLinked && finalW !== '' && customRatioW !== '' && num !== '') {
+      const aspect = Number(customRatioW) / Number(num);
+      setFinalH(Number((Number(finalW) / aspect).toFixed(2)));
+      setLinkedAspect(aspect);
+    }
+  };
+
   const toggleLink = () => {
     if (!isLinked && finalW && finalH) {
-      // 开启锁定时，抓取当前的宽高比作为新的约束比例
       setLinkedAspect(Number(finalW) / Number(finalH));
     }
     setIsLinked(!isLinked);
@@ -99,40 +132,55 @@ export default function CropSetting({ selectedImage, onProcess }: CropSettingPro
   const handleFinalWChange = (val: string) => {
     const num = val === '' ? '' : Number(val);
     setFinalW(num);
-    if (isLinked && num !== '') {
-      setFinalH(Number((num / linkedAspect).toFixed(2)));
-    } else if (!isLinked && num !== '' && finalH !== '') {
-      setLinkedAspect(num / Number(finalH));
-    }
+    if (isLinked && num !== '') setFinalH(Number((num / linkedAspect).toFixed(2)));
+    else if (!isLinked && num !== '' && finalH !== '') setLinkedAspect(num / Number(finalH));
   };
 
   const handleFinalHChange = (val: string) => {
     const num = val === '' ? '' : Number(val);
     setFinalH(num);
-    if (isLinked && num !== '') {
-      setFinalW(Number((num * linkedAspect).toFixed(2)));
-    } else if (!isLinked && num !== '' && finalW !== '') {
-      setLinkedAspect(Number(finalW) / num);
-    }
+    if (isLinked && num !== '') setFinalW(Number((num * linkedAspect).toFixed(2)));
+    else if (!isLinked && num !== '' && finalW !== '') setLinkedAspect(Number(finalW) / num);
   };
 
+  // 等比留白：智能识别防呆翻转
   const getPadPreviewAspect = () => {
-    let w = Number(finalW) || 1;
-    let h = Number(finalH) || 1;
+    let aspect = getCropAspect();
     if (imgRef) {
       const isImgLandscape = imgRef.naturalWidth > imgRef.naturalHeight;
-      const isPaperLandscape = w > h;
+      const isPaperLandscape = aspect > 1;
       if (isImgLandscape !== isPaperLandscape) {
-        const temp = w; w = h; h = temp;
+        aspect = 1 / aspect;
       }
     }
-    return w / h;
+    return aspect;
   };
 
   const handleExecute = () => {
-    const outW = Number(finalW) || 1;
-    const outH = Number(finalH) || 1;
-    onProcess(mode, outW, outH, { x: crop.x || 0, y: crop.y || 0, w: crop.width || 100, h: crop.height || 100 });
+    let outW = Number(finalW) || 1;
+    let outH = Number(finalH) || 1;
+
+    // 🌟 BUG修复2：强制将前端像素转换为绝对百分比 (0-100)，防止 Rust 触发边界保护导致裁切失效
+    let px = 0, py = 0, pw = 100, ph = 100;
+    if (crop.unit === '%') {
+        px = crop.x; py = crop.y; pw = crop.width; ph = crop.height;
+    } else if (imgRef) {
+        px = (crop.x / imgRef.width) * 100;
+        py = (crop.y / imgRef.height) * 100;
+        pw = (crop.width / imgRef.width) * 100;
+        ph = (crop.height / imgRef.height) * 100;
+    }
+
+    // 留白模式防呆翻转：如果原图和纸张横竖不一，在发给后端前自动对调宽高
+    if (mode === "pad" && imgRef) {
+      const isImgLandscape = imgRef.naturalWidth > imgRef.naturalHeight;
+      const isPaperLandscape = outW > outH;
+      if (isImgLandscape !== isPaperLandscape) {
+        const temp = outW; outW = outH; outH = temp;
+      }
+    }
+
+    onProcess(mode, outW, outH, { x: px, y: py, w: pw, h: ph });
   };
 
   if (!selectedImage) {
@@ -146,7 +194,7 @@ export default function CropSetting({ selectedImage, onProcess }: CropSettingPro
   return (
     <div className="flex flex-col flex-1 bg-white p-3 rounded-xl shadow-sm border border-gray-100 h-full min-h-0">
       
-      {/* 视觉预览区 */}
+      {/* ====== 视觉预览区 ====== */}
       <div className="w-full h-52 bg-gray-50/80 rounded-lg overflow-hidden mb-3 border border-gray-200 flex items-center justify-center p-1.5 shrink-0">
         {mode === "crop" ? (
           <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} aspect={cropAspect} className="flex-shrink-0">
@@ -157,44 +205,45 @@ export default function CropSetting({ selectedImage, onProcess }: CropSettingPro
           </ReactCrop>
         ) : (
           <div 
-            className="bg-white shadow-md border border-gray-200 flex items-center justify-center p-0.5"
-            style={{ aspectRatio: getPadPreviewAspect(), maxWidth: '100%', maxHeight: '100%' }}
+            className="bg-white shadow border border-gray-200 flex items-center justify-center"
+            style={{ aspectRatio: getPadPreviewAspect(), maxWidth: '100%', maxHeight: '100%', padding: '1px' }}
           >
             <img src={previewUrl} onLoad={(e) => setImgRef(e.currentTarget)} alt="Preview" className="w-full h-full object-contain" />
           </div>
         )}
       </div>
 
-      {/* 控制面板区 */}
+      {/* ====== 控制面板区 ====== */}
       <div className="flex-1 overflow-y-auto pr-1 space-y-4">
         
-        {/* 模式选择 */}
-        <div className="flex bg-gray-100 p-0.5 rounded-md">
-          <button onClick={() => setMode("crop")} className={`flex-1 py-1 text-xs font-bold rounded ${mode === 'crop' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>物理裁切</button>
-          <button onClick={() => setMode("pad")} className={`flex-1 py-1 text-xs font-bold rounded ${mode === 'pad' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>等比留白</button>
+        <div className="flex bg-gray-100 p-0.5 rounded-md shrink-0">
+          <button onClick={() => setMode("crop")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'crop' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>物理裁切</button>
+          <button onClick={() => setMode("pad")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'pad' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>等比留白</button>
         </div>
 
-        {/* ✂️ 解耦：仅控制裁切比例 */}
+        {/* ✂️ 比例设置 (统一名称：自定义比例) */}
         <div>
-          <h3 className="text-[11px] font-bold text-gray-400 mb-1.5 tracking-wider">裁切比例</h3>
+          <h3 className="text-[11px] font-bold text-gray-400 mb-1.5 tracking-wider">
+             比例预设
+          </h3>
           <div className="grid grid-cols-2 gap-1.5">
             {PRESETS.map(preset => (
-              <button key={preset.label} onClick={() => setActivePreset(preset.label)} className={`py-1.5 text-xs font-bold border rounded-md ${activePreset === preset.label ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+              <button key={preset.label} onClick={() => handlePresetClick(preset.label)} className={`py-1.5 text-xs font-bold border rounded-md transition-colors ${activePreset === preset.label ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
                 {preset.label}
               </button>
             ))}
-            <button onClick={() => setActivePreset("自定义比例")} className={`col-span-2 py-1.5 text-xs font-bold border rounded-md ${activePreset === "自定义比例" ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+            <button onClick={() => handlePresetClick("自定义比例")} className={`col-span-2 py-1.5 text-xs font-bold border rounded-md transition-colors ${activePreset === "自定义比例" ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
               自定义比例
             </button>
           </div>
 
           {activePreset === "自定义比例" && (
-             <div className="flex gap-2 mt-2 items-center bg-gray-50 p-1.5 rounded-md border border-gray-100">
+             <div className="flex gap-2 mt-2 items-center bg-gray-50 p-1.5 rounded-md border border-gray-100 animate-fade-in-down">
                 <span className="text-[10px] text-gray-400 font-bold ml-1 w-6">宽:</span>
-                <input type="number" value={customRatioW} onChange={(e) => setCustomRatioW(e.target.value === '' ? '' : Number(e.target.value))} className="w-14 px-1 py-0.5 text-xs font-bold text-center border border-gray-200 rounded focus:border-blue-500 outline-none" />
+                <input type="number" value={customRatioW} onChange={(e) => handleCustomRatioWChange(e.target.value)} className="w-14 px-1 py-0.5 text-xs font-bold text-center border border-gray-200 rounded focus:border-blue-500 outline-none" />
                 <span className="text-gray-400 font-bold text-[10px]">cm</span>
                 <span className="text-[10px] text-gray-400 font-bold w-6 text-right">高:</span>
-                <input type="number" value={customRatioH} onChange={(e) => setCustomRatioH(e.target.value === '' ? '' : Number(e.target.value))} className="w-14 px-1 py-0.5 text-xs font-bold text-center border border-gray-200 rounded focus:border-blue-500 outline-none" />
+                <input type="number" value={customRatioH} onChange={(e) => handleCustomRatioHChange(e.target.value)} className="w-14 px-1 py-0.5 text-xs font-bold text-center border border-gray-200 rounded focus:border-blue-500 outline-none" />
                 <span className="text-gray-400 font-bold text-[10px]">cm</span>
              </div>
           )}
@@ -205,7 +254,7 @@ export default function CropSetting({ selectedImage, onProcess }: CropSettingPro
           <h3 className="text-[11px] font-bold text-gray-400 mb-1.5 tracking-wider">图像尺寸</h3>
           <div className="p-2 bg-gray-50 border border-gray-200 rounded-md flex">
             
-            {/* 锁链约束线 */}
+            {/* 长宽约束锁链 */}
             <div className="w-8 flex flex-col items-center justify-center mr-1 relative">
               <div className="absolute left-[18px] top-[14px] bottom-[14px] w-[10px] border-l-2 border-t-2 border-b-2 border-gray-300 rounded-l"></div>
               <button 
@@ -221,7 +270,6 @@ export default function CropSetting({ selectedImage, onProcess }: CropSettingPro
               </button>
             </div>
 
-            {/* 无分辨率版 尺寸输入框 */}
             <div className="flex-1 space-y-2">
               <div className="flex items-center">
                 <span className="text-[11px] font-bold text-gray-500 w-10">宽度:</span>
