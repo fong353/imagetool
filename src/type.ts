@@ -13,7 +13,6 @@ export default function App() {
   const [activePaper, setActivePaper] = useState(PAPER_CATEGORIES[0]);
   const [customPaper, setCustomPaper] = useState(""); 
   const [zoomWidth, setZoomWidth] = useState(DEFAULT_ZOOM);
-  const [activeTab, setActiveTab] = useState<"paper" | "crop">("crop"); // 默认切到裁切面板方便测试
 
   useEffect(() => {
     const unlistenPromise = getCurrentWebview().onDragDropEvent((event) => {
@@ -24,38 +23,25 @@ export default function App() {
         const filePaths = (event.payload as any).paths || [];
         if (filePaths.length === 0) return;
         
-        // 1. 初始化空 URL 防止大图直接卡死前端
         const newImages: ImageItem[] = filePaths.map((path: string) => {
           const fileName = path.split("/").pop() || "未知文件";
           const isSupported = /\.(jpg|jpeg|tif|tiff)$/i.test(path);
           return {
-            path, 
-            url: "", // 空的，等待 Rust 生成
-            name: fileName,
-            selected: false, 
-            size: isSupported ? "解析生成中..." : "⚠️ 不支持",
+            path, url: convertFileSrc(path), name: fileName,
+            selected: false, size: isSupported ? "解析标头中..." : "⚠️ 不支持的文件",
             isSupported
           };
         });
         
         setImages(prev => [...prev, ...newImages]);
 
-        // 2. 并发向 Rust 请求物理尺寸和 Base64 缩略图
         newImages.forEach(async (img) => {
           if (img.isSupported) {
             try {
-              const [sizeStr, thumbBase64] = await Promise.all([
-                invoke<string>("get_image_size", { pathStr: img.path }),
-                invoke<string>("generate_thumbnail", { pathStr: img.path }) // 统一生成缩略图
-              ]);
-              setImages(prev => prev.map(p => 
-                p.path === img.path ? { ...p, size: sizeStr, url: thumbBase64 } : p
-              ));
+              const sizeStr = await invoke<string>("get_image_size", { pathStr: img.path });
+              setImages(prev => prev.map(p => p.path === img.path ? { ...p, size: sizeStr } : p));
             } catch {
-              // 兜底方案
-              setImages(prev => prev.map(p => 
-                p.path === img.path ? { ...p, size: "未知", url: convertFileSrc(img.path) } : p
-              ));
+              setImages(prev => prev.map(p => p.path === img.path ? { ...p, size: "尺寸未知" } : p));
             }
           }
         });
@@ -77,12 +63,40 @@ export default function App() {
     if (!selectedForCrop) return;
     try {
       const newPath = await invoke<string>("process_image", {
-        pathStr: selectedForCrop.path, mode: mode, targetWCm: targetW, targetHCm: targetH,
-        cropX: cropData.x, cropY: cropData.y, cropW: cropData.w, cropH: cropData.h
+        pathStr: selectedForCrop.path,
+        mode: mode,
+        targetWCm: targetW,
+        targetHCm: targetH,
+        cropX: cropData.x,
+        cropY: cropData.y,
+        cropW: cropData.w,
+        cropH: cropData.h
       });
-      alert(`处理成功！保存至:\n${newPath}`);
+      
+      alert(`处理成功！文件已保存至:\n${newPath}\n(物理DPI护甲已注入)`);
+      deselectAll();
     } catch (error) {
       alert("处理失败：" + error);
+    }
+  };
+
+  const handleRename = async () => {
+    if (selectedImages.length === 0) return;
+    try {
+      const finalPaperType = customPaper.trim() !== "" ? customPaper.trim() : activePaper;
+      const payload = selectedImages.map((img) => [img.path, finalPaperType]);
+      const renamedData = await invoke<[string, string, string][]>("rename_files", { filesToProcess: payload });
+      
+      setImages(prev => prev.map(img => {
+        const match = renamedData.find(([oldPath]) => oldPath === img.path);
+        if (match) {
+          const [, newPath, newName] = match;
+          return { ...img, path: newPath, name: newName, url: convertFileSrc(newPath), selected: false };
+        }
+        return img;
+      }));
+    } catch (error) {
+      alert("处理失败了：" + error);
     }
   };
 
@@ -93,23 +107,12 @@ export default function App() {
         onToggleSelect={toggleSelect} onSelectAll={selectAll} onDeselectAll={deselectAll} 
         onClearAll={clearAll} onRemoveSelected={removeSelected}
       />
-      
-      <div className="w-65 flex flex-col gap-4 h-full">
-        <div className="flex bg-white p-1.5 rounded-xl shadow-sm border border-gray-100 shrink-0">
-          <button onClick={() => setActiveTab("paper")} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "paper" ? "bg-gray-100 text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-700 hover:bg-gray-50"}`}>纸张分配</button>
-          <button onClick={() => setActiveTab("crop")} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === "crop" ? "bg-gray-100 text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-700 hover:bg-gray-50"}`}>物理排版</button>
-        </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {activeTab === "paper" ? (
-            <Sidebar 
-              activePaper={activePaper} setActivePaper={setActivePaper} customPaper={customPaper} setCustomPaper={setCustomPaper}
-              selectedImages={selectedImages} onExecuteRename={() => {}}
-            />
-          ) : (
-            <CropSetting selectedImage={selectedForCrop} onProcess={handleProcess} />
-          )}
-        </div>
+      <div className="w-80 flex flex-col gap-6">
+        <Sidebar 
+          activePaper={activePaper} setActivePaper={setActivePaper} customPaper={customPaper} setCustomPaper={setCustomPaper}
+          selectedImages={selectedImages} onExecuteRename={handleRename}
+        />
+        <CropSetting selectedImage={selectedForCrop} onProcess={handleProcess} />
       </div>
     </div>
   );
