@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-// --- 精准读取模块 (保持不变，用于界面显示尺寸) ---
+// --- 精准读取模块 ---
 fn get_dpi_from_exif(path: &Path) -> Option<f32> {
     let file = fs::File::open(path).ok()?;
     let mut bufreader = std::io::BufReader::new(&file);
@@ -70,7 +70,7 @@ fn get_image_size(path_str: String) -> Result<String, String> {
     Ok(format!("{:.1} x {:.1} cm", width_cm, height_cm))
 }
 
-// --- 💡 全新的安全重命名模块 ---
+// --- 安全重命名 + 强力保底注入模块 ---
 #[tauri::command]
 fn rename_files(files_to_process: Vec<(String, String)>) -> Result<Vec<(String, String, String)>, String> {
     let mut results = Vec::new();
@@ -82,11 +82,9 @@ fn rename_files(files_to_process: Vec<(String, String)>) -> Result<Vec<(String, 
         let parent = path.parent().unwrap_or(Path::new(""));
         let ext = path.extension().unwrap_or_default().to_str().unwrap_or("jpg");
         
-        // 初始目标文件名：类目-序号.后缀
         let mut new_name = format!("{}-{}.{}", paper_type, index + 1, ext);
         let mut new_path = parent.join(&new_name);
 
-        // 💡 核心防冲突逻辑：如果同名文件已存在，则追加 _1, _2 ... 序号
         let mut collision_counter = 1;
         while new_path.exists() {
             new_name = format!("{}-{}_{}.{}", paper_type, index + 1, collision_counter, ext);
@@ -94,13 +92,49 @@ fn rename_files(files_to_process: Vec<(String, String)>) -> Result<Vec<(String, 
             collision_counter += 1;
         }
 
-        // 直接物理重命名，不修改任何文件内部数据
-        match fs::rename(path, &new_path) {
-            Ok(_) => {
-                results.push((path_str.clone(), new_path.to_string_lossy().to_string(), new_name));
-            },
-            Err(e) => return Err(e.to_string())
+        let is_jpg = ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg");
+        let mut injected = false;
+
+        // 💡 强力保底机制：如果是 JPG，检查它有没有任意一种标头
+        if is_jpg {
+            let has_exif = get_dpi_from_exif(path).is_some();
+            let has_jfif = get_dpi_from_jfif(path).is_some();
+
+            // 如果两个都没有，说明是裸图，强行注入 300 DPI APP0 标头
+            if !has_exif && !has_jfif {
+                if let Ok(data) = fs::read(path) {
+                    if data.len() > 2 && data[0] == 0xFF && data[1] == 0xD8 {
+                        let mut out = Vec::with_capacity(data.len() + 18);
+                        out.extend_from_slice(&[0xFF, 0xD8]);
+                        
+                        let jfif = vec![
+                            0xFF, 0xE0, 0x00, 0x10, b'J', b'F', b'I', b'F', 0x00,
+                            0x01, 0x01, 0x01, // 0x01 = DPI
+                            0x01, 0x2C,       // X分辩率: 300 (16进制 012C)
+                            0x01, 0x2C,       // Y分辩率: 300 (16进制 012C)
+                            0x00, 0x00
+                        ];
+                        out.extend_from_slice(&jfif);
+                        out.extend_from_slice(&data[2..]); // 安全拼接剩下的原始数据
+                        
+                        if fs::write(&new_path, out).is_ok() {
+                            fs::remove_file(path).ok();
+                            injected = true;
+                        }
+                    }
+                }
+            }
         }
+
+        // 如果不是裸图，或者注入失败，或者不是 JPG，则走常规防冲突改名
+        if !injected {
+            match fs::rename(path, &new_path) {
+                Ok(_) => {},
+                Err(e) => return Err(e.to_string())
+            }
+        }
+        
+        results.push((path_str.clone(), new_path.to_string_lossy().to_string(), new_name));
     }
 
     Ok(results)
