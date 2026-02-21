@@ -1,4 +1,4 @@
-import { ImageItem } from "../types";
+
 
 export const PAPER_CATEGORIES = [
   "210蚀刻", "315蚀刻", "水彩纸", "硫化钡", "博物馆蚀刻",
