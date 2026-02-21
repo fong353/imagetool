@@ -31,7 +31,7 @@ export default function App() {
         
         const newImages: ImageItem[] = filePaths.map((path: string) => {
           const fileName = path.split("/").pop() || "未知文件";
-          const isSupported = /\.(jpg|jpeg|tif|tiff)$/i.test(path);
+          const isSupported = /\.(jpg|jpeg|tif|tiff|png|webp|psd)$/i.test(path);
           return {
             path, 
             url: "", 
