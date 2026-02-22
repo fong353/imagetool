@@ -109,6 +109,47 @@ async fn process_image(
 }
 
 #[tauri::command]
+fn rename_files(files_to_process: Vec<Vec<String>>) -> Result<Vec<(String, String, String)>, String> {
+    let mut results = Vec::new();
+    
+    // 遍历前端发来的每一张图 [老路径, 纸张材质]
+    for (index, file_info) in files_to_process.iter().enumerate() {
+        if file_info.len() < 2 { continue; }
+        let old_path_str = &file_info[0];
+        let paper_type = &file_info[1];
+        
+        let old_path = std::path::Path::new(old_path_str);
+        if !old_path.exists() {
+            continue; // 原文件如果找不到就跳过
+        }
+        
+        let parent = old_path.parent().unwrap_or(std::path::Path::new(""));
+        let ext = old_path.extension().unwrap_or_default().to_string_lossy();
+        
+        // 1. 拼接新文件名: 类目-序号.后缀 (例如: 315蚀刻-1.jpg)
+        // 注意：index 是从 0 开始的，所以要 +1
+        let new_name = format!("{}-{}.{}", paper_type, index + 1, ext);
+        let new_path = parent.join(&new_name);
+        
+        // 2. 🌟 核心修复：真正在物理硬盘上执行改名！
+        if let Err(_) = std::fs::rename(&old_path, &new_path) {
+            // 如果因为 Mac 权限或跨盘符导致直接 rename 失败，采用最稳妥的兜底方案：先复制，再删除
+            std::fs::copy(&old_path, &new_path).map_err(|e| format!("物理复制失败: {}", e))?;
+            std::fs::remove_file(&old_path).map_err(|e| format!("清理原文件失败: {}", e))?;
+        }
+        
+        // 3. 把新路径和新名字打包发给前端
+        results.push((
+            old_path_str.to_string(), 
+            new_path.to_string_lossy().to_string(), 
+            new_name
+        ));
+    }
+    
+    Ok(results)
+}
+
+#[tauri::command]
 fn get_image_size(path_str: String) -> Result<String, String> {
     // 同样使用 magick identify 替换原有探针
     let target_layer = format!("{}[0]", path_str);
@@ -177,7 +218,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             process_image,
             get_image_size,
-            generate_thumbnail
+            generate_thumbnail,
+            rename_files
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
