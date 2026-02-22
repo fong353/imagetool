@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { ImageItem } from "./types";
 import Sidebar from "./components/Sidebar";
 import ImageGrid, { DEFAULT_ZOOM } from "./components/ImageGrid";
@@ -11,15 +11,12 @@ export default function App() {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   
-  // 纸张分配相关的状态
   const [activePaper, setActivePaper] = useState(PAPER_CATEGORIES[0]);
   const [customPaper, setCustomPaper] = useState(""); 
   
-  // 视图控制
   const [zoomWidth, setZoomWidth] = useState(DEFAULT_ZOOM);
   const [activeTab, setActiveTab] = useState<"paper" | "crop">("crop");
 
-  // 🌟 监听文件拖入事件
   useEffect(() => {
     const unlistenPromise = getCurrentWebview().onDragDropEvent((event) => {
       if (event.payload.type === "over") setIsDragging(true);
@@ -47,17 +44,19 @@ export default function App() {
         newImages.forEach(async (img) => {
           if (img.isSupported) {
             try {
-              const [sizeStr, thumbBase64] = await Promise.all([
+              const [sizeStr, thumbUrl] = await Promise.all([
                 invoke<string>("get_image_size", { pathStr: img.path }),
                 invoke<string>("generate_thumbnail", { pathStr: img.path })
               ]);
+              // 加上时间戳，防止本地协议图片被浏览器死缓存
+              const finalUrl = thumbUrl.startsWith("asset://") ? `${thumbUrl}?t=${Date.now()}` : thumbUrl;
               setImages(prev => prev.map(p => 
-                p.path === img.path ? { ...p, size: sizeStr, url: thumbBase64 } : p
+                p.path === img.path ? { ...p, size: sizeStr, url: finalUrl } : p
               ));
             } catch (error) {
-              console.error(`解析 ${img.name} 失败，使用兜底路径:`, error);
+              console.error(`解析 ${img.name} 失败:`, error);
               setImages(prev => prev.map(p => 
-                p.path === img.path ? { ...p, size: "尺寸未知", url: convertFileSrc(img.path) } : p
+                p.path === img.path ? { ...p, size: "尺寸未知" } : p
               ));
             }
           }
@@ -75,21 +74,19 @@ export default function App() {
 
   const selectedImages = images.filter(img => img.selected && img.isSupported);
 
-  // ====== 🌟 核心引擎：一键批量执行 (已加装雷达监控) ======
+  // ====== 🌟 图像排版：强制刷新数据 ======
   const handleProcessAll = async (payloads: ProcessPayload[]) => {
-    console.log("🚀 [大管家雷达] 1. 成功收到面板传来的打包指令！", payloads);
-
     if (payloads.length === 0) {
       alert("⚠️ 提示：请先在左侧网格中【点击选中】至少一张图片，然后再点击执行！");
       return; 
     }
     
     let successCount = 0;
+    const processedPaths = new Set<string>(); // 记录哪些图片被成功覆盖了
     
     for (const payload of payloads) {
-      console.log(`🚀 [大管家雷达] 2. 正在呼叫 Rust 引擎处理图片: ${payload.image.name}...`);
       try {
-        const res = await invoke("process_image", {
+        await invoke("process_image", {
           pathStr: payload.image.path, 
           mode: payload.mode, 
           targetWCm: payload.targetW, 
@@ -99,36 +96,63 @@ export default function App() {
           cropW: payload.cropData.w, 
           cropH: payload.cropData.h
         });
-        console.log(`✅ [Rust 返回] 3. ${payload.image.name} 处理成功！成图路径:`, res);
         successCount++;
+        processedPaths.add(payload.image.path);
       } catch (error) {
-        console.error(`❌ [Rust 崩溃] 处理 ${payload.image.name} 时底层报错:`, error);
+        console.error(`❌ 处理 ${payload.image.name} 失败:`, error);
       }
     }
 
-    console.log("🚀 [大管家雷达] 4. 任务流结束，成功数量:", successCount);
     if (successCount > 0) {
-       alert(`✅ 处理完成！\n成功执行了 ${successCount} 张图片并已注入 300 DPI 护甲。`);
+       // 🌟 重新去本地硬盘请求最新的尺寸和画面！
+       const updatedImages = await Promise.all(images.map(async (img) => {
+          if (processedPaths.has(img.path)) {
+             try {
+                const newSize = await invoke<string>("get_image_size", { pathStr: img.path });
+                let newThumb = await invoke<string>("generate_thumbnail", { pathStr: img.path });
+                if (newThumb.startsWith("asset://")) newThumb = `${newThumb}?t=${Date.now()}`;
+                return { ...img, size: newSize, url: newThumb };
+             } catch (e) {
+                return img;
+             }
+          }
+          return img;
+       }));
+       setImages(updatedImages);
+       
+       alert(`✅ 处理完成！\n成功排版 ${successCount} 张图片，左侧列表已更新。`);
     } else {
-       alert("❌ 处理失败，请查看控制台的红色报错。");
+       alert("❌ 处理失败，请查看控制台。");
     }
   };
 
+  // ====== 🌟 纸张分配：重命名并强制刷新数据 ======
   const handleRename = async () => {
     if (selectedImages.length === 0) return;
     try {
       const finalPaperType = customPaper.trim() !== "" ? customPaper.trim() : activePaper;
       const payload = selectedImages.map((img) => [img.path, finalPaperType]);
+      
       const renamedData = await invoke<[string, string, string][]>("rename_files", { filesToProcess: payload });
       
-      setImages(prev => prev.map(img => {
+      // 🌟 用新路径去请求缩略图和尺寸
+      const updatedImages = await Promise.all(images.map(async (img) => {
         const match = renamedData.find(([oldPath]) => oldPath === img.path);
         if (match) {
           const [, newPath, newName] = match;
-          return { ...img, path: newPath, name: newName, url: convertFileSrc(newPath), selected: false };
+          try {
+             const newSize = await invoke<string>("get_image_size", { pathStr: newPath });
+             let newThumb = await invoke<string>("generate_thumbnail", { pathStr: newPath });
+             if (newThumb.startsWith("asset://")) newThumb = `${newThumb}?t=${Date.now()}`;
+             return { ...img, path: newPath, name: newName, url: newThumb, size: newSize, selected: false };
+          } catch (e) {
+             return { ...img, path: newPath, name: newName, selected: false };
+          }
         }
         return img;
       }));
+      
+      setImages(updatedImages);
     } catch (error) {
       alert("处理失败了：" + error);
     }

@@ -30,7 +30,6 @@ interface ImageConfig {
   linkedAspect: number;
   mode: string; 
   crop: Crop;
-  // 🌟 新增：专属图像大小的记忆状态
   resizeW: number | '';
   resizeH: number | '';
   resizeLinked: boolean;
@@ -60,19 +59,16 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   const [newPresetW, setNewPresetW] = useState<number | ''>('');
   const [newPresetH, setNewPresetH] = useState<number | ''>('');
 
-  // 模块一 (排版) 状态
   const [activePreset, setActivePreset] = useState<string>("图像尺寸");
   const [customW, setCustomW] = useState<number | ''>(20);
   const [customH, setCustomH] = useState<number | ''>(20);
   const [isLinked, setIsLinked] = useState<boolean>(true);
   const [linkedAspect, setLinkedAspect] = useState<number>(1);
   
-  // 模块二 (缩放) 状态
   const [resizeW, setResizeW] = useState<number | ''>(20);
   const [resizeH, setResizeH] = useState<number | ''>(20);
   const [resizeLinked, setResizeLinked] = useState<boolean>(true);
 
-  // 全局核心模式 (crop | pad | resize)
   const [mode, setMode] = useState<string>("crop");
   
   const [crop, setCrop] = useState<Crop>({ unit: "%", x: 0, y: 0, width: 100, height: 100 });
@@ -110,6 +106,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     let aspect = w / h;
     if (imgW && imgH) {
       const isImgLandscape = imgW > imgH;
+      // 等比留白时自动旋转画布适应图片方向
       if (isImgLandscape !== (aspect > 1)) aspect = 1 / aspect;
     }
     return aspect;
@@ -132,7 +129,6 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     }
   }, [currentImage, previewUrl]);
 
-  // 初始化加载数据
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
     setImgRef(img);
@@ -169,7 +165,6 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
           const p = presets.find(x => x.label === finalPreset);
           finalW = p ? p.w : 20; finalH = p ? p.h : 20;
         }
-        // Resize 模式每次都按原图重置
         finalResizeW = origW; finalResizeH = origH; finalResizeLinked = true;
         setResizeW(finalResizeW); setResizeH(finalResizeH); setResizeLinked(true);
       }
@@ -186,7 +181,6 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     }
   };
 
-  // ----- 模块一 (排版) 操作函数 -----
   const handlePresetClick = (label: string) => {
     setActivePreset(label);
     let w = 20, h = 20;
@@ -243,7 +237,6 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     setIsLinked(!isLinked);
   };
 
-  // ----- 模块二 (缩放) 操作函数 -----
   const handleResizeWChange = (val: string) => {
     const num = val === '' ? '' : Number(val);
     let newW = num, newH = resizeH;
@@ -282,7 +275,6 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   const handleCropChange = (_c: Crop, percentCrop: PercentCrop) => { setCrop(percentCrop); if (currentImage) updateConfig(currentImage.path, { crop: percentCrop }); };
   const handleSetMode = (m: string) => { setMode(m); if (currentImage) updateConfig(currentImage.path, { mode: m }); };
 
-  // ----- 模版管理函数 -----
   const handleSavePreset = () => {
     if (!newPresetLabel.trim() || !newPresetW || !newPresetH) return alert("请填写完整的模版名称、宽度和高度！");
     if (presets.some(p => p.label === newPresetLabel.trim())) return alert("该模版名称已存在，请换一个名称！");
@@ -300,7 +292,6 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     if (activePreset === label) handlePresetClick("图像尺寸"); 
   };
 
-  // ----- 打包发送引擎 -----
   const handleExecuteAll = () => {
     console.log("🎯 [面板雷达] 准备组装数据...");
     try {
@@ -333,6 +324,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
 
         if (finalMode === "pad") {
           let [fileRawW, fileRawH] = parseSize(img.size);
+          // 等比留白时自动旋转画布
           if (fileRawW > fileRawH !== outW > outH) { const temp = outW; outW = outH; outH = temp; }
         }
 
@@ -357,7 +349,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   return (
     <div className="flex flex-col flex-1 bg-white p-3 rounded-xl shadow-sm border border-gray-100 h-full min-h-0 relative">
       
-      {/* 视觉预览区 (根据模式自动隐藏裁切框) */}
+      {/* 🌟 核心修复区：完美还原模拟画布预览 */}
       <div className="w-full h-48 bg-gray-50/80 rounded-lg overflow-hidden mb-3 border border-gray-200 flex flex-col items-center justify-center p-1.5 shrink-0 relative group">
         <div className="absolute top-2 left-2 z-10 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded backdrop-blur-sm font-bold shadow-sm">
           正在查阅: {currentIndex + 1} / {selectedImages.length}
@@ -368,39 +360,43 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
             <img src={previewUrl} alt="Preview" onLoad={handleImageLoad} style={{ display: 'block', maxWidth: '100%', maxHeight: '176px', width: 'auto', height: 'auto' }} />
           </ReactCrop>
         ) : (
-          <div className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300" style={{ maxWidth: '100%', maxHeight: '100%', padding: '2px' }}>
-            <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="max-w-full max-h-[172px] object-contain" />
+          <div 
+            className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative" 
+            style={{ 
+              // 关键修复：动态计算比例，恢复模拟纸张的功能
+              aspectRatio: mode === 'resize' 
+                  ? (Number(resizeW) || 1) / (Number(resizeH) || 1) 
+                  : getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH),
+              maxHeight: '176px', 
+              maxWidth: '100%', 
+              padding: '2px' 
+            }}
+          >
+            <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="w-full h-full object-contain" />
           </div>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar">
         
-        {/* ========================================================= */}
-        {/* 互斥模块 A：高级排版 (裁切/留白) */}
-        {/* ========================================================= */}
         <div className={`border-2 rounded-xl overflow-hidden transition-all duration-300 ${mode !== 'resize' ? 'border-blue-400 shadow-sm bg-white' : 'border-gray-200 bg-gray-50/50 hover:border-blue-200 cursor-pointer'}`}>
-          
           <div className={`p-2 flex items-center gap-2 ${mode !== 'resize' ? 'bg-blue-50 border-b border-blue-100' : ''}`} onClick={() => mode === 'resize' && handleSetMode('crop')}>
              <div className={`w-3.5 h-3.5 rounded-full border-2 flex flex-shrink-0 items-center justify-center ${mode !== 'resize' ? 'border-blue-600 bg-blue-600' : 'border-gray-400'}`}>
                {mode !== 'resize' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
              </div>
              <span className={`text-[11px] font-bold ${mode !== 'resize' ? 'text-blue-800' : 'text-gray-500'}`}>模块 A：画板与排版</span>
           </div>
-
           {mode !== 'resize' && (
             <div className="p-2 space-y-3 animate-fade-in-down">
               <div className="flex bg-gray-100 p-0.5 rounded-md shrink-0">
                 <button onClick={() => handleSetMode("crop")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'crop' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>物理裁切</button>
                 <button onClick={() => handleSetMode("pad")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'pad' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>等比留白</button>
               </div>
-
               <div>
                 <div className="flex justify-between items-end mb-1.5">
                   <h3 className="text-[10px] font-bold text-gray-400">模版库与输出尺寸</h3>
                   <button onClick={() => setIsAddingPreset(!isAddingPreset)} className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">+ 新增</button>
                 </div>
-
                 {isAddingPreset && (
                   <div className="mb-2 p-1.5 bg-gray-50 border border-gray-200 rounded-md flex flex-col gap-1.5">
                     <input type="text" placeholder="备注 (如: 海报 5x10)" value={newPresetLabel} onChange={e => setNewPresetLabel(e.target.value)} className="w-full px-2 py-1 text-[11px] font-bold border border-gray-200 rounded outline-none" />
@@ -413,7 +409,6 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
                     </div>
                   </div>
                 )}
-
                 <div className="grid grid-cols-2 gap-1.5">
                   {presets.map(preset => (
                     <div key={preset.label} className="relative group">
@@ -423,7 +418,6 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
                   ))}
                   <button onClick={() => handlePresetClick("图像尺寸")} className={`col-span-2 py-1 text-[11px] font-bold border rounded-md transition-colors ${activePreset === "图像尺寸" ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>图像尺寸 (自由设定)</button>
                 </div>
-                
                 {activePreset === "图像尺寸" && (
                    <div className="flex gap-1 mt-1.5 items-center justify-center bg-gray-50 p-1.5 rounded-md border border-gray-100">
                       <button onClick={toggleLink} className={`p-1 bg-white border border-gray-200 shadow-sm rounded ${isLinked ? 'text-blue-600' : 'text-gray-400'}`}>
@@ -440,21 +434,15 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
           )}
         </div>
 
-        {/* ========================================================= */}
-        {/* 互斥模块 B：图像大小 (纯像素缩放) */}
-        {/* ========================================================= */}
         <div className={`border-2 rounded-xl overflow-hidden transition-all duration-300 ${mode === 'resize' ? 'border-purple-400 shadow-sm bg-white' : 'border-gray-200 bg-gray-50/50 hover:border-purple-200 cursor-pointer'}`}>
-          
           <div className={`p-2 flex items-center gap-2 ${mode === 'resize' ? 'bg-purple-50 border-b border-purple-100' : ''}`} onClick={() => handleSetMode('resize')}>
              <div className={`w-3.5 h-3.5 rounded-full border-2 flex flex-shrink-0 items-center justify-center ${mode === 'resize' ? 'border-purple-600 bg-purple-600' : 'border-gray-400'}`}>
                {mode === 'resize' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
              </div>
              <span className={`text-[11px] font-bold ${mode === 'resize' ? 'text-purple-800' : 'text-gray-500'}`}>模块 B：图像大小 (纯缩放)</span>
           </div>
-
           {mode === 'resize' && (
             <div className="p-3 animate-fade-in-down">
-               <p className="text-[10px] text-purple-600 font-bold mb-2 leading-tight">不改变画面内容，直接将全图缩放至指定尺寸。相当于 Photoshop 的“图像大小”。</p>
                <div className="flex gap-2 items-center justify-center bg-purple-50/50 p-2 rounded-md border border-purple-100">
                   <button onClick={toggleResizeLink} className={`p-1.5 bg-white border border-purple-200 shadow-sm rounded ${resizeLinked ? 'text-purple-600' : 'text-gray-400'}`}>
                     {resizeLinked ? <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M13.2 7.8l-1.4-1.4c-1.5-1.5-4-1.5-5.5 0l-2.8 2.8c-1.5 1.5-1.5 4 0 5.5l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.7-.7-.7-2 0-2.8l2.8-2.8c.8-.8 2-.8 2.8 0l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.4-.4-1-.4-1.4 0s-.4 1 0 1.4l1.4 1.4c1.5 1.5 4 1.5 5.5 0l2.8-2.8c1.5-1.5 1.5-4.1 0-5.6z"/></svg> : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>}
@@ -472,11 +460,9 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
                     </div>
                   </div>
                </div>
-               {!resizeLinked && <p className="text-[9px] text-red-500 font-bold mt-2 text-center">⚠️ 比例已解锁，强行修改将导致图像拉伸变形！</p>}
             </div>
           )}
         </div>
-
       </div>
 
       <div className="mt-2 pt-2 border-t border-gray-100 shrink-0 flex items-center justify-between gap-2">

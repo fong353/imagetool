@@ -15,13 +15,11 @@ async fn process_image(
     crop_h: f32,
 ) -> Result<String, String> {
     println!("🚀 收到处理请求！文件: {}, 模式: {}", path_str, mode);
-    let input_path = Path::new(&path_str);
+    let input_path = std::path::Path::new(&path_str);
     if !input_path.exists() {
         return Err("文件不存在".to_string());
     }
 
-    // 🌟 终极升级：使用 ImageMagick 强悍的 identify 探测任何工业格式的尺寸
-    // 加上 [0] 是为了防止 PSD/PDF 多图层导致返回多个尺寸卡死
     let target_layer = format!("{}[0]", path_str);
     let output_dim = std::process::Command::new("magick")
         .args(["identify", "-format", "%w %h", &target_layer])
@@ -51,10 +49,11 @@ async fn process_image(
 
     let ext = input_path.extension().unwrap_or_default().to_string_lossy();
     let file_stem = input_path.file_stem().unwrap_or_default().to_string_lossy();
-    let parent_dir = input_path.parent().unwrap_or(Path::new(""));
-    let output_path = parent_dir.join(format!("{}_{}_输出.{}", file_stem, mode, ext));
+    let parent_dir = input_path.parent().unwrap_or(std::path::Path::new(""));
+    
+    // 🌟 核心改动 1：使用“安全临时文件”过渡
+    let temp_output = parent_dir.join(format!("{}_temp.{}", file_stem, ext));
 
-    // 🌟 核心防线：输入路径强行附加 [0]，让 ImageMagick 把 PSD 自动拍平(Flatten)，只取最终视觉层！
     let mut args = vec![
         format!("{}[0]", input_path.to_string_lossy()) 
     ];
@@ -93,52 +92,86 @@ async fn process_image(
         args.push("LZW".to_string());
     }
 
-    args.push(output_path.to_string_lossy().to_string());
+    // 指示引擎先将结果吐到临时文件里
+    args.push(temp_output.to_string_lossy().to_string());
 
     let output = std::process::Command::new("magick")
         .args(args)
         .output()
-        .map_err(|e| format!("无法启动系统 ImageMagick 引擎: {}", e))?;
+        .map_err(|e| format!("无法启动引擎: {}", e))?;
 
     if !output.status.success() {
+        // 如果处理失败，悄悄删掉破损的临时文件，保护原文件不动
+        let _ = std::fs::remove_file(&temp_output);
         let err_msg = String::from_utf8_lossy(&output.stderr);
         return Err(format!("引擎底层报错: {}", err_msg));
     }
 
-    Ok(output_path.to_string_lossy().to_string())
+    // 🌟 核心改动 2：完美掩人耳目的“原名覆盖”
+    // 只有 100% 处理成功后，才瞬间拿临时文件替换掉原文件！
+    if let Err(_) = std::fs::rename(&temp_output, &input_path) {
+        std::fs::copy(&temp_output, &input_path).map_err(|e| format!("覆盖原文件失败: {}", e))?;
+        let _ = std::fs::remove_file(&temp_output);
+    }
+
+    Ok(input_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
 fn rename_files(files_to_process: Vec<Vec<String>>) -> Result<Vec<(String, String, String)>, String> {
     let mut results = Vec::new();
     
-    // 遍历前端发来的每一张图 [老路径, 纸张材质]
     for (index, file_info) in files_to_process.iter().enumerate() {
         if file_info.len() < 2 { continue; }
         let old_path_str = &file_info[0];
         let paper_type = &file_info[1];
         
         let old_path = std::path::Path::new(old_path_str);
-        if !old_path.exists() {
-            continue; // 原文件如果找不到就跳过
-        }
+        if !old_path.exists() { continue; }
         
         let parent = old_path.parent().unwrap_or(std::path::Path::new(""));
         let ext = old_path.extension().unwrap_or_default().to_string_lossy();
         
-        // 1. 拼接新文件名: 类目-序号.后缀 (例如: 315蚀刻-1.jpg)
-        // 注意：index 是从 0 开始的，所以要 +1
+        // 拼接新名字
         let new_name = format!("{}-{}.{}", paper_type, index + 1, ext);
         let new_path = parent.join(&new_name);
         
-        // 2. 🌟 核心修复：真正在物理硬盘上执行改名！
-        if let Err(_) = std::fs::rename(&old_path, &new_path) {
-            // 如果因为 Mac 权限或跨盘符导致直接 rename 失败，采用最稳妥的兜底方案：先复制，再删除
-            std::fs::copy(&old_path, &new_path).map_err(|e| format!("物理复制失败: {}", e))?;
-            std::fs::remove_file(&old_path).map_err(|e| format!("清理原文件失败: {}", e))?;
+        // 🌟 核心升级：改名的同时，用引擎强行洗一遍头文件，注入 300 DPI！
+        let mut args = vec![
+            format!("{}[0]", old_path_str), // 防多图层
+            "-density".to_string(), "300".to_string(),
+            "-units".to_string(), "PixelsPerInch".to_string()
+        ];
+        
+        // 如果是 TIF，保留 LZW 压缩
+        if ext.to_lowercase() == "tif" || ext.to_lowercase() == "tiff" {
+            args.push("-compress".to_string());
+            args.push("LZW".to_string());
+        }
+        args.push(new_path.to_string_lossy().to_string());
+
+        let output = std::process::Command::new("magick").args(args).output();
+
+        if let Ok(out) = output {
+            if out.status.success() {
+                // 处理成功，如果名字确实变了，就把旧的删掉
+                if old_path != new_path {
+                    let _ = std::fs::remove_file(&old_path);
+                }
+            } else {
+                // 引擎意外报错，退化为普通物理改名（兜底机制）
+                if let Err(_) = std::fs::rename(&old_path, &new_path) {
+                    let _ = std::fs::copy(&old_path, &new_path);
+                    let _ = std::fs::remove_file(&old_path);
+                }
+            }
+        } else {
+            if let Err(_) = std::fs::rename(&old_path, &new_path) {
+                let _ = std::fs::copy(&old_path, &new_path);
+                let _ = std::fs::remove_file(&old_path);
+            }
         }
         
-        // 3. 把新路径和新名字打包发给前端
         results.push((
             old_path_str.to_string(), 
             new_path.to_string_lossy().to_string(), 
