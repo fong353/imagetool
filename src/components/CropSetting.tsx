@@ -106,7 +106,6 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     let aspect = w / h;
     if (imgW && imgH) {
       const isImgLandscape = imgW > imgH;
-      // 等比留白时自动旋转画布适应图片方向
       if (isImgLandscape !== (aspect > 1)) aspect = 1 / aspect;
     }
     return aspect;
@@ -292,46 +291,73 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     if (activePreset === label) handlePresetClick("图像尺寸"); 
   };
 
+  // ==========================================
+  // 🌟 核心修改：执行引擎分流 (模块A批量 vs 模块B单张)
+  // ==========================================
   const handleExecuteAll = () => {
     console.log("🎯 [面板雷达] 准备组装数据...");
     try {
-      const payloads: ProcessPayload[] = selectedImages.map((img) => {
+      if (mode === "resize") {
+        // 🟣 模块 B：强行阻断批量，只处理当前屏幕上预览的这一张！
+        const img = selectedImages[currentIndex];
+        if (!img) return;
+        
         const conf = configsRef.current[img.path];
-        let outW = 20, outH = 20, px = 0, py = 0, pw = 100, ph = 100, finalMode = mode;
-
+        let outW = Number(resizeW) || 1;
+        let outH = Number(resizeH) || 1;
+        
         if (conf) {
-          finalMode = conf.mode;
-          if (finalMode === "resize") {
-             outW = Number(conf.resizeW) || 1; outH = Number(conf.resizeH) || 1;
-          } else {
-             if (conf.preset === "图像尺寸") { outW = Number(conf.customW) || 1; outH = Number(conf.customH) || 1; } 
-             else { const p = presets.find(x => x.label === conf.preset); outW = p ? p.w : 20; outH = p ? p.h : 20; }
-             px = conf.crop.x; py = conf.crop.y; pw = conf.crop.width; ph = conf.crop.height;
-          }
-        } else {
-          finalMode = mode;
-          if (finalMode === "resize") {
-             outW = Number(resizeW) || 1; outH = Number(resizeH) || 1;
-          } else {
-             if (activePreset === "图像尺寸") { outW = Number(customW) || 1; outH = Number(customH) || 1; } 
-             else { const p = presets.find(x => x.label === activePreset); outW = p ? p.w : 20; outH = p ? p.h : 20; }
-             const [origW, origH] = parseSize(img.size);
-             const aspect = getAspectFromParams(origW, origH, activePreset, outW, outH);
-             const autoCrop = generateDefaultCrop(origW, origH, aspect);
-             px = autoCrop.x; py = autoCrop.y; pw = autoCrop.width; ph = autoCrop.height;
-          }
+          outW = Number(conf.resizeW) || 1;
+          outH = Number(conf.resizeH) || 1;
         }
+        
+        onProcessAll([{
+          image: img,
+          mode: "resize",
+          targetW: outW,
+          targetH: outH,
+          cropData: { x: 0, y: 0, w: 100, h: 100 }
+        }]);
+        
+      } else {
+        // 🟢 模块 A：保持原封不动，全选遍历批量发送！
+        const payloads: ProcessPayload[] = selectedImages.map((img) => {
+          const conf = configsRef.current[img.path];
+          let outW = 20, outH = 20, px = 0, py = 0, pw = 100, ph = 100, finalMode = mode;
 
-        if (finalMode === "pad") {
-          let [fileRawW, fileRawH] = parseSize(img.size);
-          // 等比留白时自动旋转画布
-          if (fileRawW > fileRawH !== outW > outH) { const temp = outW; outW = outH; outH = temp; }
-        }
+          if (conf) {
+            finalMode = conf.mode;
+            if (finalMode === "resize") {
+               outW = Number(conf.resizeW) || 1; outH = Number(conf.resizeH) || 1;
+            } else {
+               if (conf.preset === "图像尺寸") { outW = Number(conf.customW) || 1; outH = Number(conf.customH) || 1; } 
+               else { const p = presets.find(x => x.label === conf.preset); outW = p ? p.w : 20; outH = p ? p.h : 20; }
+               px = conf.crop.x; py = conf.crop.y; pw = conf.crop.width; ph = conf.crop.height;
+            }
+          } else {
+            finalMode = mode;
+            if (finalMode === "resize") {
+               outW = Number(resizeW) || 1; outH = Number(resizeH) || 1;
+            } else {
+               if (activePreset === "图像尺寸") { outW = Number(customW) || 1; outH = Number(customH) || 1; } 
+               else { const p = presets.find(x => x.label === activePreset); outW = p ? p.w : 20; outH = p ? p.h : 20; }
+               const [origW, origH] = parseSize(img.size);
+               const aspect = getAspectFromParams(origW, origH, activePreset, outW, outH);
+               const autoCrop = generateDefaultCrop(origW, origH, aspect);
+               px = autoCrop.x; py = autoCrop.y; pw = autoCrop.width; ph = autoCrop.height;
+            }
+          }
 
-        return { image: img, mode: finalMode, targetW: outW, targetH: outH, cropData: { x: px, y: py, w: pw, h: ph } };
-      });
+          if (finalMode === "pad") {
+            let [fileRawW, fileRawH] = parseSize(img.size);
+            if (fileRawW > fileRawH !== outW > outH) { const temp = outW; outW = outH; outH = temp; }
+          }
 
-      onProcessAll(payloads);
+          return { image: img, mode: finalMode, targetW: outW, targetH: outH, cropData: { x: px, y: py, w: pw, h: ph } };
+        });
+
+        onProcessAll(payloads);
+      }
     } catch (e) {
       console.error("❌ [面板雷达] 崩溃:", e);
       alert("打包排版数据时发生错误！");
@@ -349,7 +375,6 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   return (
     <div className="flex flex-col flex-1 bg-white p-3 rounded-xl shadow-sm border border-gray-100 h-full min-h-0 relative">
       
-      {/* 🌟 核心修复区：完美还原模拟画布预览 */}
       <div className="w-full h-48 bg-gray-50/80 rounded-lg overflow-hidden mb-3 border border-gray-200 flex flex-col items-center justify-center p-1.5 shrink-0 relative group">
         <div className="absolute top-2 left-2 z-10 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded backdrop-blur-sm font-bold shadow-sm">
           正在查阅: {currentIndex + 1} / {selectedImages.length}
@@ -363,7 +388,6 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
           <div 
             className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative" 
             style={{ 
-              // 关键修复：动态计算比例，恢复模拟纸张的功能
               aspectRatio: mode === 'resize' 
                   ? (Number(resizeW) || 1) / (Number(resizeH) || 1) 
                   : getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH),
@@ -469,8 +493,12 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
         <button onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))} disabled={currentIndex === 0} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
         </button>
+        {/* 🌟 核心修改：动态变脸的按钮文案与颜色 */}
         <button onClick={handleExecuteAll} className={`flex-1 h-10 text-white rounded-lg text-[13px] font-bold shadow-md active:scale-95 transition-all ${mode === 'resize' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-[#0B1527] hover:bg-black'}`}>
-          一键执行打包 ({selectedImages.length}张)
+          {mode === 'resize' 
+            ? `执行当前图像 (${currentIndex + 1} / ${selectedImages.length})` 
+            : `一键执行打包 (${selectedImages.length}张)`
+          }
         </button>
         <button onClick={() => setCurrentIndex(prev => Math.min(selectedImages.length - 1, prev + 1))} disabled={currentIndex === selectedImages.length - 1} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
