@@ -21,10 +21,10 @@ interface ImageGridProps {
 
 export default function ImageGrid({
   images, isDragging, zoomWidth, setZoomWidth, 
-  onToggleSelect, onSelectAll, onDeselectAll, onClearAll, onRemoveSelected,
+  onToggleSelect, onSelectAll, onDeselectAll, onClearAll, 
   activeTab, replicateCounts, onUpdateCount
 }: ImageGridProps) {
-  const selectedCount = images.filter(img => img.selected && img.isSupported).length;
+  
   const [editingPath, setEditingPath] = useState<string | null>(null);
 
   return (
