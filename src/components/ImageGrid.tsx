@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ImageItem } from "../types";
 
 export const DEFAULT_ZOOM = 180;
@@ -12,13 +13,20 @@ interface ImageGridProps {
   onDeselectAll: () => void;
   onClearAll: () => void;
   onRemoveSelected: () => void;
+  activeTab?: string;
+  replicateCounts?: Record<string, number>;
+  onUpdateCount?: (path: string, count: number) => void;
 }
 
 export default function ImageGrid({
   images, isDragging, zoomWidth, setZoomWidth, 
-  onToggleSelect, onSelectAll, onDeselectAll, onClearAll, onRemoveSelected
+  onToggleSelect, onSelectAll, onDeselectAll, onClearAll, onRemoveSelected,
+  activeTab, replicateCounts, onUpdateCount
 }: ImageGridProps) {
   const selectedCount = images.filter(img => img.selected && img.isSupported).length;
+  
+  // 🌟 新增状态：记录当前正在编辑哪张图片的份数
+  const [editingPath, setEditingPath] = useState<string | null>(null);
 
   return (
     <div className={`flex-1 flex flex-col border-2 border-dashed rounded-3xl transition-all duration-300 ease-out overflow-hidden relative ${
@@ -41,9 +49,11 @@ export default function ImageGrid({
             </div>
           </div>
           <div className="flex gap-2 items-center">
-            <button onClick={onSelectAll} className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors">全选</button>
-            <button onClick={onDeselectAll} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">取消全选</button>
-            
+            <button onClick={onSelectAll} className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors">全选合法项</button>
+            <button onClick={onDeselectAll} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">取消</button>
+            <button onClick={onRemoveSelected} disabled={selectedCount === 0} title="移除选中的图片" className={`flex items-center justify-center p-1.5 rounded-lg border transition-colors ${selectedCount > 0 ? "border-orange-200 text-orange-500 hover:bg-orange-50 bg-white shadow-sm" : "border-gray-200 text-gray-300 bg-gray-50/50 cursor-not-allowed"}`}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </button>
             <div className="w-px h-5 bg-gray-200 mx-1"></div>
             <button onClick={onClearAll} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-300 transition-colors">一键清空</button>
           </div>
@@ -63,6 +73,47 @@ export default function ImageGrid({
                     <svg className="w-12 h-12 text-red-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                   )}
                   <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md backdrop-blur-sm font-mono z-10">{index + 1}</div>
+                  
+                  {/* 🌟 核心修复：内联式数量修改器，规避 Tauri 弹窗限制 */}
+                  {activeTab === 'replicate' && img.isSupported && (
+                    <div 
+                      onClick={(e) => {
+                        e.stopPropagation(); // 阻止触发图片选中
+                        setEditingPath(img.path);
+                      }}
+                      className={`absolute bottom-2 right-2 text-[11px] font-bold px-2 py-1 rounded-lg shadow-lg cursor-pointer transition-all z-20 border min-w-[36px] flex justify-center items-center ${
+                        editingPath === img.path 
+                        ? "bg-white text-purple-700 border-purple-500 scale-110" 
+                        : "bg-purple-600 text-white border-purple-400 hover:bg-purple-700 active:scale-95"
+                      }`}
+                    >
+                      {editingPath === img.path ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          min={1}
+                          defaultValue={replicateCounts?.[img.path] || 1}
+                          onClick={(e) => e.stopPropagation()} // 防止点击输入框时触发图片选中
+                          onBlur={(e) => {
+                            const val = Math.max(1, parseInt(e.target.value) || 1);
+                            onUpdateCount?.(img.path, val);
+                            setEditingPath(null); // 失去焦点时保存并恢复标签状态
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const val = Math.max(1, parseInt(e.currentTarget.value) || 1);
+                              onUpdateCount?.(img.path, val);
+                              setEditingPath(null); // 回车时保存并恢复标签状态
+                            }
+                          }}
+                          className="w-6 bg-transparent outline-none text-center font-bold p-0 m-0 text-purple-700"
+                        />
+                      ) : (
+                        <span>{replicateCounts?.[img.path] || 1} 张</span>
+                      )}
+                    </div>
+                  )}
+
                   {img.isSupported && (
                     <div className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all z-10 ${ img.selected ? "bg-blue-500 border-blue-500" : "bg-white/90 border-gray-300" }`}>
                       {img.selected && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
@@ -88,7 +139,7 @@ export default function ImageGrid({
         <div className="flex-1 flex flex-col items-center justify-center text-center pointer-events-none">
           <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
           <p className="text-lg text-gray-600 font-medium">将需要处理的文件拖拽至此</p>
-          <p className="mt-2 text-sm text-gray-400">支持 JPG&TIF&PSD，其他文件将标红处理</p>
+          <p className="mt-2 text-sm text-gray-400">仅支持 JPG 和 TIF 格式，其他文件将标红处理</p>
         </div>
       )}
     </div>

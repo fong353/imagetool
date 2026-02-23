@@ -198,11 +198,16 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   };
 
   const handleCustomWChange = (val: string) => {
-    const num = val === '' ? '' : Number(val);
+    const num: number | '' = val === '' ? '' : Number(val);
     setActivePreset("图像尺寸");
-    let newW = num, newH = customH, newAspect = linkedAspect;
+    // 🌟 核心修复：强制声明类型，防止 TS 将空字符串推断为普通 string
+    let newW: number | '' = num;
+    let newH: number | '' = customH;
+    let newAspect: number = linkedAspect;
+    
     if (isLinked && num !== '') newH = Number((num / linkedAspect).toFixed(2));
     else if (!isLinked && num !== '' && customH !== '') newAspect = num / Number(customH);
+    
     setCustomW(newW); setCustomH(newH); setLinkedAspect(newAspect);
     if (!imgRef || !currentImage) return;
     const aspect = getAspectFromParams(imgRef.naturalWidth, imgRef.naturalHeight, "图像尺寸", newW, newH);
@@ -212,11 +217,15 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   };
 
   const handleCustomHChange = (val: string) => {
-    const num = val === '' ? '' : Number(val);
+    const num: number | '' = val === '' ? '' : Number(val);
     setActivePreset("图像尺寸");
-    let newW = customW, newH = num, newAspect = linkedAspect;
+    let newW: number | '' = customW;
+    let newH: number | '' = num;
+    let newAspect: number = linkedAspect;
+    
     if (isLinked && num !== '') newW = Number((num * linkedAspect).toFixed(2));
     else if (!isLinked && num !== '' && customW !== '') newAspect = Number(customW) / num;
+    
     setCustomW(newW); setCustomH(newH); setLinkedAspect(newAspect);
     if (!imgRef || !currentImage) return;
     const aspect = getAspectFromParams(imgRef.naturalWidth, imgRef.naturalHeight, "图像尺寸", newW, newH);
@@ -237,8 +246,9 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   };
 
   const handleResizeWChange = (val: string) => {
-    const num = val === '' ? '' : Number(val);
-    let newW = num, newH = resizeH;
+    const num: number | '' = val === '' ? '' : Number(val);
+    let newW: number | '' = num;
+    let newH: number | '' = resizeH;
     if (resizeLinked && num !== '' && currentImage) {
       const [origW, origH] = parseSize(currentImage.size);
       newH = Number((num / (origW / origH)).toFixed(2));
@@ -248,8 +258,9 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   };
 
   const handleResizeHChange = (val: string) => {
-    const num = val === '' ? '' : Number(val);
-    let newW = resizeW, newH = num;
+    const num: number | '' = val === '' ? '' : Number(val);
+    let newW: number | '' = resizeW;
+    let newH: number | '' = num;
     if (resizeLinked && num !== '' && currentImage) {
       const [origW, origH] = parseSize(currentImage.size);
       newW = Number((num * (origW / origH)).toFixed(2));
