@@ -393,7 +393,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
                   : getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH),
               maxHeight: '176px', 
               maxWidth: '100%', 
-              padding: '2px' 
+              padding: '0' 
             }}
           >
             <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="w-full h-full object-contain" />
@@ -413,7 +413,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
           {mode !== 'resize' && (
             <div className="p-2 space-y-3 animate-fade-in-down">
               <div className="flex bg-gray-100 p-0.5 rounded-md shrink-0">
-                <button onClick={() => handleSetMode("crop")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'crop' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>物理裁切</button>
+                <button onClick={() => handleSetMode("crop")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'crop' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>等比裁切</button>
                 <button onClick={() => handleSetMode("pad")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'pad' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>等比留白</button>
               </div>
               <div>
@@ -497,7 +497,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
         <button onClick={handleExecuteAll} className={`flex-1 h-10 text-white rounded-lg text-[13px] font-bold shadow-md active:scale-95 transition-all ${mode === 'resize' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-[#0B1527] hover:bg-black'}`}>
           {mode === 'resize' 
             ? `执行当前图像 (${currentIndex + 1} / ${selectedImages.length})` 
-            : `一键执行打包 (${selectedImages.length}张)`
+            : `执行选中图像 (${selectedImages.length}张)`
           }
         </button>
         <button onClick={() => setCurrentIndex(prev => Math.min(selectedImages.length - 1, prev + 1))} disabled={currentIndex === selectedImages.length - 1} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">

@@ -224,7 +224,7 @@ export default function PaperSetting({
         onClick={onExecute} disabled={selectedCount === 0} 
         className="w-full mt-4 py-3.5 bg-gray-900 hover:bg-black disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white rounded-2xl font-semibold transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 shrink-0"
       >
-        <span>执行修改与命名</span>
+        <span>执行改名</span>
         {selectedCount > 0 && <span className="bg-blue-500 text-white px-2 py-0.5 rounded-full text-xs font-mono">{selectedCount}</span>}
       </button>
     </div>
