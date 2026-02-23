@@ -127,7 +127,7 @@ export default function PaperSetting({
               纸张与工艺分配
               {isEditMode && <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-normal animate-pulse">配置模式</span>}
             </h2>
-            <p className="text-[11px] text-gray-500 mt-1 mb-3">应用后将自动命名为 <br/><span className="font-mono text-gray-700 bg-gray-100 px-1 py-0.5 rounded">类目-工艺-序号_特征码.后缀</span></p>
+            <p className="text-[11px] text-gray-500 mt-1 mb-3">应用后将自动命名为 <br/><span className="font-mono text-gray-700 bg-gray-100 px-1 py-0.5 rounded">类目-工艺-序号.后缀</span></p>
           </div>
         </div>
 

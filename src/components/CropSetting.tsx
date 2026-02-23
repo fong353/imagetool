@@ -45,8 +45,8 @@ const parseSize = (sizeStr?: string): [number, number] => {
 export default function CropSetting({ selectedImages, onProcessAll }: CropSettingProps) {
   const [ , setConfigs] = useState<Record<string, ImageConfig>>({});
   const configsRef = useRef<Record<string, ImageConfig>>({});
-  const isFirstImageInitRef = useRef(false);
-
+  
+  const loadedImagePathRef = useRef<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const [presets, setPresets] = useState<CustomPreset[]>(() => {
@@ -77,9 +77,9 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
 
   useEffect(() => {
     if (selectedImages.length === 0) {
-      isFirstImageInitRef.current = false;
       setConfigs({});
       configsRef.current = {};
+      loadedImagePathRef.current = null;
     }
     if (currentIndex >= selectedImages.length) setCurrentIndex(Math.max(0, selectedImages.length - 1));
   }, [selectedImages.length, currentIndex]);
@@ -120,11 +120,46 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     }
   };
 
+  const getFallbackConfig = (origW: number, origH: number) => {
+    if (selectedImages.length > 0) {
+      const masterConf = configsRef.current[selectedImages[0].path];
+      if (masterConf) return masterConf;
+    }
+    return {
+      preset: "图像尺寸", customW: origW, customH: origH,
+      isLinked: true, linkedAspect: origW / origH, mode: "crop",
+      resizeW: origW, resizeH: origH, resizeLinked: true,
+      crop: { unit: "%", x: 0, y: 0, width: 100, height: 100 }
+    } as ImageConfig;
+  };
+
+  // 🌟 修复点 1：恢复数据与UI的真实同步！拒绝乱跳！
   useEffect(() => {
-    if (!currentImage) { setPreviewUrl(""); setImgRef(null); return; }
+    if (currentImage) {
+       const conf = configsRef.current[currentImage.path];
+       const [origW, origH] = parseSize(currentImage.size);
+       const sourceConf = conf || getFallbackConfig(origW, origH);
+       
+       setActivePreset(sourceConf.preset);
+       setCustomW(sourceConf.customW); setCustomH(sourceConf.customH);
+       setIsLinked(sourceConf.isLinked); setLinkedAspect(sourceConf.linkedAspect);
+       
+       // 只要底层有记录，UI 就老老实实反映它的模式（不再强制篡改）
+       setMode(sourceConf.mode);
+       
+       setResizeW(sourceConf.resizeW); setResizeH(sourceConf.resizeH); setResizeLinked(sourceConf.resizeLinked);
+    }
+  }, [currentIndex, selectedImages]);
+
+  useEffect(() => {
+    if (!currentImage) { 
+        setPreviewUrl(""); setImgRef(null); loadedImagePathRef.current = null; return; 
+    }
     if (currentImage.url !== previewUrl) {
       setPreviewUrl(currentImage.url);
       setImgRef(null);
+      loadedImagePathRef.current = null; 
+      setCrop({ unit: "%", x: 0, y: 0, width: 100, height: 100 });
     }
   }, [currentImage, previewUrl]);
 
@@ -134,80 +169,63 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     if (!currentImage) return;
 
     const path = currentImage.path;
+    loadedImagePathRef.current = path;
+
     const conf = configsRef.current[path];
     const [origW, origH] = parseSize(currentImage.size);
 
     if (conf) {
-      setActivePreset(conf.preset);
-      setCustomW(conf.customW); setCustomH(conf.customH);
+      setActivePreset(conf.preset); setCustomW(conf.customW); setCustomH(conf.customH);
       setIsLinked(conf.isLinked); setLinkedAspect(conf.linkedAspect);
       setResizeW(conf.resizeW); setResizeH(conf.resizeH); setResizeLinked(conf.resizeLinked);
-      setMode(conf.mode); setCrop(conf.crop);
+      setMode(conf.mode); setCrop(conf.crop); 
     } else {
-      let finalPreset = activePreset;
-      let finalW = customW, finalH = customH, finalLinkedAspect = linkedAspect;
-      let finalResizeW = resizeW, finalResizeH = resizeH, finalResizeLinked = resizeLinked;
-
-      if (!isFirstImageInitRef.current) {
-        finalPreset = "图像尺寸";
-        finalW = origW; finalH = origH; finalLinkedAspect = origW / origH;
-        finalResizeW = origW; finalResizeH = origH; finalResizeLinked = true;
-        
-        setActivePreset(finalPreset);
-        setCustomW(finalW); setCustomH(finalH); setLinkedAspect(finalLinkedAspect); setIsLinked(true);
-        setResizeW(finalResizeW); setResizeH(finalResizeH); setResizeLinked(true);
-        isFirstImageInitRef.current = true;
-      } else {
-        if (finalPreset === "图像尺寸") {
-          finalW = Number(customW) || 1; finalH = Number(customH) || 1;
-        } else {
-          const p = presets.find(x => x.label === finalPreset);
-          finalW = p ? p.w : 20; finalH = p ? p.h : 20;
-        }
-        finalResizeW = origW; finalResizeH = origH; finalResizeLinked = true;
-        setResizeW(finalResizeW); setResizeH(finalResizeH); setResizeLinked(true);
-      }
-
-      const aspect = getAspectFromParams(img.naturalWidth, img.naturalHeight, finalPreset, finalW, finalH);
+      const fallback = getFallbackConfig(origW, origH);
+      const aspect = getAspectFromParams(img.naturalWidth, img.naturalHeight, fallback.preset, fallback.customW, fallback.customH);
       const newCrop = generateDefaultCrop(img.naturalWidth, img.naturalHeight, aspect);
       
       updateConfig(path, {
-        preset: finalPreset, customW: finalW, customH: finalH, 
-        isLinked: isLinked, linkedAspect: finalLinkedAspect, mode: mode, crop: newCrop,
-        resizeW: finalResizeW, resizeH: finalResizeH, resizeLinked: finalResizeLinked
+        preset: fallback.preset, customW: fallback.customW, customH: fallback.customH, 
+        isLinked: fallback.isLinked, linkedAspect: fallback.linkedAspect, mode: fallback.mode, crop: newCrop,
+        resizeW: fallback.resizeW, resizeH: fallback.resizeH, resizeLinked: fallback.resizeLinked
       });
       setCrop(newCrop);
     }
   };
 
+  const handleCropChange = (_c: Crop, percentCrop: PercentCrop) => { 
+    setCrop(percentCrop); 
+    if (currentImage && loadedImagePathRef.current === currentImage.path) {
+        updateConfig(currentImage.path, { crop: percentCrop }); 
+    }
+  };
+
   const handlePresetClick = (label: string) => {
     setActivePreset(label);
-    let w = 20, h = 20;
+    let w: number | '' = 20, h: number | '' = 20;
     if (label === "图像尺寸") {
       w = Number(customW) || 1; h = Number(customH) || 1;
     } else {
       const preset = presets.find(p => p.label === label);
       w = preset ? preset.w : 20; h = preset ? preset.h : 20;
-      setCustomW(w); setCustomH(h); setLinkedAspect(w / h);
+      setCustomW(w); setCustomH(h); setLinkedAspect(Number(w) / Number(h));
     }
     if (!imgRef || !currentImage) return;
     const aspect = getAspectFromParams(imgRef.naturalWidth, imgRef.naturalHeight, label, w, h);
     const newCrop = generateDefaultCrop(imgRef.naturalWidth, imgRef.naturalHeight, aspect);
     setCrop(newCrop);
-    updateConfig(currentImage.path, { preset: label, customW: w, customH: h, linkedAspect: w/h, crop: newCrop });
+    updateConfig(currentImage.path, { preset: label, customW: w, customH: h, linkedAspect: Number(w)/Number(h), crop: newCrop });
   };
 
+  // 🌟 修复点 2：严格的 TypeScript 声明，保证打包顺畅
   const handleCustomWChange = (val: string) => {
     const num: number | '' = val === '' ? '' : Number(val);
     setActivePreset("图像尺寸");
-    // 🌟 核心修复：强制声明类型，防止 TS 将空字符串推断为普通 string
     let newW: number | '' = num;
     let newH: number | '' = customH;
     let newAspect: number = linkedAspect;
-    
     if (isLinked && num !== '') newH = Number((num / linkedAspect).toFixed(2));
     else if (!isLinked && num !== '' && customH !== '') newAspect = num / Number(customH);
-    
     setCustomW(newW); setCustomH(newH); setLinkedAspect(newAspect);
     if (!imgRef || !currentImage) return;
     const aspect = getAspectFromParams(imgRef.naturalWidth, imgRef.naturalHeight, "图像尺寸", newW, newH);
@@ -222,10 +240,8 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     let newW: number | '' = customW;
     let newH: number | '' = num;
     let newAspect: number = linkedAspect;
-    
     if (isLinked && num !== '') newW = Number((num * linkedAspect).toFixed(2));
     else if (!isLinked && num !== '' && customW !== '') newAspect = Number(customW) / num;
-    
     setCustomW(newW); setCustomH(newH); setLinkedAspect(newAspect);
     if (!imgRef || !currentImage) return;
     const aspect = getAspectFromParams(imgRef.naturalWidth, imgRef.naturalHeight, "图像尺寸", newW, newH);
@@ -235,7 +251,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   };
 
   const toggleLink = () => {
-    if (!isLinked && customW && customH) {
+    if (!isLinked && customW !== '' && customH !== '') {
       const aspect = Number(customW) / Number(customH);
       setLinkedAspect(aspect);
       if (currentImage) updateConfig(currentImage.path, { linkedAspect: aspect, isLinked: true });
@@ -282,8 +298,10 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     }
   };
 
-  const handleCropChange = (_c: Crop, percentCrop: PercentCrop) => { setCrop(percentCrop); if (currentImage) updateConfig(currentImage.path, { crop: percentCrop }); };
-  const handleSetMode = (m: string) => { setMode(m); if (currentImage) updateConfig(currentImage.path, { mode: m }); };
+  const handleSetMode = (m: string) => { 
+    setMode(m); 
+    if (currentImage) updateConfig(currentImage.path, { mode: m }); 
+  };
 
   const handleSavePreset = () => {
     if (!newPresetLabel.trim() || !newPresetW || !newPresetH) return alert("请填写完整的模版名称、宽度和高度！");
@@ -302,75 +320,71 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     if (activePreset === label) handlePresetClick("图像尺寸"); 
   };
 
-  // ==========================================
-  // 🌟 核心修改：执行引擎分流 (模块A批量 vs 模块B单张)
-  // ==========================================
   const handleExecuteAll = () => {
-    console.log("🎯 [面板雷达] 准备组装数据...");
     try {
       if (mode === "resize") {
-        // 🟣 模块 B：强行阻断批量，只处理当前屏幕上预览的这一张！
         const img = selectedImages[currentIndex];
         if (!img) return;
-        
         const conf = configsRef.current[img.path];
         let outW = Number(resizeW) || 1;
         let outH = Number(resizeH) || 1;
+        if (conf) { outW = Number(conf.resizeW) || 1; outH = Number(conf.resizeH) || 1; }
         
-        if (conf) {
-          outW = Number(conf.resizeW) || 1;
-          outH = Number(conf.resizeH) || 1;
-        }
+        onProcessAll([{ image: img, mode: "resize", targetW: outW, targetH: outH, cropData: { x: 0, y: 0, w: 100, h: 100 } }]);
         
-        onProcessAll([{
-          image: img,
-          mode: "resize",
-          targetW: outW,
-          targetH: outH,
-          cropData: { x: 0, y: 0, w: 100, h: 100 }
-        }]);
-        
-      } else {
-        // 🟢 模块 A：保持原封不动，全选遍历批量发送！
-        const payloads: ProcessPayload[] = selectedImages.map((img) => {
-          const conf = configsRef.current[img.path];
-          let outW = 20, outH = 20, px = 0, py = 0, pw = 100, ph = 100, finalMode = mode;
+        // 🌟 保留配置，只重置旧裁切框，防止处理后数据被删导致界面反弹
+        setConfigs(prev => { 
+            const n = {...prev}; 
+            if (n[img.path]) {
+                n[img.path] = { ...n[img.path], crop: { unit: "%", x: 0, y: 0, width: 100, height: 100 } };
+                configsRef.current[img.path] = n[img.path];
+            }
+            return n; 
+        });
 
-          if (conf) {
-            finalMode = conf.mode;
-            if (finalMode === "resize") {
-               outW = Number(conf.resizeW) || 1; outH = Number(conf.resizeH) || 1;
-            } else {
-               if (conf.preset === "图像尺寸") { outW = Number(conf.customW) || 1; outH = Number(conf.customH) || 1; } 
-               else { const p = presets.find(x => x.label === conf.preset); outW = p ? p.w : 20; outH = p ? p.h : 20; }
-               px = conf.crop.x; py = conf.crop.y; pw = conf.crop.width; ph = conf.crop.height;
-            }
+      } else {
+        const payloads: ProcessPayload[] = selectedImages.map((img) => {
+          let conf = configsRef.current[img.path];
+          if (!conf) {
+            const [origW, origH] = parseSize(img.size);
+            const fallback = getFallbackConfig(origW, origH);
+            const aspect = getAspectFromParams(origW, origH, fallback.preset, fallback.customW, fallback.customH);
+            const autoCrop = generateDefaultCrop(origW, origH, aspect);
+            conf = { ...fallback, crop: autoCrop };
+          }
+
+          let outW = 20, outH = 20, px = 0, py = 0, pw = 100, ph = 100, finalMode = conf.mode;
+          if (finalMode === "resize") {
+             outW = Number(conf.resizeW) || 1; outH = Number(conf.resizeH) || 1;
           } else {
-            finalMode = mode;
-            if (finalMode === "resize") {
-               outW = Number(resizeW) || 1; outH = Number(resizeH) || 1;
-            } else {
-               if (activePreset === "图像尺寸") { outW = Number(customW) || 1; outH = Number(customH) || 1; } 
-               else { const p = presets.find(x => x.label === activePreset); outW = p ? p.w : 20; outH = p ? p.h : 20; }
-               const [origW, origH] = parseSize(img.size);
-               const aspect = getAspectFromParams(origW, origH, activePreset, outW, outH);
-               const autoCrop = generateDefaultCrop(origW, origH, aspect);
-               px = autoCrop.x; py = autoCrop.y; pw = autoCrop.width; ph = autoCrop.height;
-            }
+             if (conf.preset === "图像尺寸") { outW = Number(conf.customW) || 1; outH = Number(conf.customH) || 1; } 
+             else { const p = presets.find(x => x.label === conf.preset); outW = p ? p.w : 20; outH = p ? p.h : 20; }
+             px = conf.crop.x; py = conf.crop.y; pw = conf.crop.width; ph = conf.crop.height;
           }
 
           if (finalMode === "pad") {
             let [fileRawW, fileRawH] = parseSize(img.size);
-            if (fileRawW > fileRawH !== outW > outH) { const temp = outW; outW = outH; outH = temp; }
+            if ((fileRawW > fileRawH) !== (outW > outH)) { const temp = outW; outW = outH; outH = temp; }
           }
-
           return { image: img, mode: finalMode, targetW: outW, targetH: outH, cropData: { x: px, y: py, w: pw, h: ph } };
         });
 
         onProcessAll(payloads);
+
+        // 🌟 保留配置，只重置旧裁切框，防止处理后数据被删导致界面反弹
+        setConfigs(prev => {
+           const n = {...prev};
+           payloads.forEach(p => {
+               if (n[p.image.path]) {
+                   n[p.image.path] = { ...n[p.image.path], crop: { unit: "%", x: 0, y: 0, width: 100, height: 100 } };
+                   configsRef.current[p.image.path] = n[p.image.path];
+               }
+           });
+           return n;
+        });
       }
     } catch (e) {
-      console.error("❌ [面板雷达] 崩溃:", e);
+      console.error("❌ 崩溃:", e);
       alert("打包排版数据时发生错误！");
     }
   };
@@ -385,35 +399,25 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
 
   return (
     <div className="flex flex-col flex-1 bg-white p-3 rounded-xl shadow-sm border border-gray-100 h-full min-h-0 relative">
-      
       <div className="w-full h-48 bg-gray-50/80 rounded-lg overflow-hidden mb-3 border border-gray-200 flex flex-col items-center justify-center p-1.5 shrink-0 relative group">
         <div className="absolute top-2 left-2 z-10 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded backdrop-blur-sm font-bold shadow-sm">
           正在查阅: {currentIndex + 1} / {selectedImages.length}
         </div>
         
+        {/* 🌟 核心修复 3：去掉了这里错误的 || mode === 'pad' 判定！ */}
+        {/* 现在选物理裁切有框，选其它全都会展示漂亮的等比背景留白容器！ */}
         {mode === "crop" ? (
-          <ReactCrop crop={crop} onChange={handleCropChange} aspect={getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH)} className="flex-shrink-0">
+          <ReactCrop key={currentImage?.path || 'empty'} crop={crop} onChange={handleCropChange} aspect={getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH)} className="flex-shrink-0">
             <img src={previewUrl} alt="Preview" onLoad={handleImageLoad} style={{ display: 'block', maxWidth: '100%', maxHeight: '176px', width: 'auto', height: 'auto' }} />
           </ReactCrop>
         ) : (
-          <div 
-            className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative" 
-            style={{ 
-              aspectRatio: mode === 'resize' 
-                  ? (Number(resizeW) || 1) / (Number(resizeH) || 1) 
-                  : getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH),
-              maxHeight: '176px', 
-              maxWidth: '100%', 
-              padding: '0' 
-            }}
-          >
+          <div className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative" style={{ aspectRatio: mode === 'resize' ? (Number(resizeW) || 1) / (Number(resizeH) || 1) : getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH), maxHeight: '176px', maxWidth: '100%', padding: '2px' }}>
             <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="w-full h-full object-contain" />
           </div>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar">
-        
         <div className={`border-2 rounded-xl overflow-hidden transition-all duration-300 ${mode !== 'resize' ? 'border-blue-400 shadow-sm bg-white' : 'border-gray-200 bg-gray-50/50 hover:border-blue-200 cursor-pointer'}`}>
           <div className={`p-2 flex items-center gap-2 ${mode !== 'resize' ? 'bg-blue-50 border-b border-blue-100' : ''}`} onClick={() => mode === 'resize' && handleSetMode('crop')}>
              <div className={`w-3.5 h-3.5 rounded-full border-2 flex flex-shrink-0 items-center justify-center ${mode !== 'resize' ? 'border-blue-600 bg-blue-600' : 'border-gray-400'}`}>
@@ -424,7 +428,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
           {mode !== 'resize' && (
             <div className="p-2 space-y-3 animate-fade-in-down">
               <div className="flex bg-gray-100 p-0.5 rounded-md shrink-0">
-                <button onClick={() => handleSetMode("crop")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'crop' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>等比裁切</button>
+                <button onClick={() => handleSetMode("crop")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'crop' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>物理裁切</button>
                 <button onClick={() => handleSetMode("pad")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'pad' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>等比留白</button>
               </div>
               <div>
@@ -456,7 +460,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
                 {activePreset === "图像尺寸" && (
                    <div className="flex gap-1 mt-1.5 items-center justify-center bg-gray-50 p-1.5 rounded-md border border-gray-100">
                       <button onClick={toggleLink} className={`p-1 bg-white border border-gray-200 shadow-sm rounded ${isLinked ? 'text-blue-600' : 'text-gray-400'}`}>
-                        {isLinked ? <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M13.2 7.8l-1.4-1.4c-1.5-1.5-4-1.5-5.5 0l-2.8 2.8c-1.5 1.5-1.5 4 0 5.5l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.7-.7-.7-2 0-2.8l2.8-2.8c.8-.8 2-.8 2.8 0l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.4-.4-1-.4-1.4 0s-.4 1 0 1.4l1.4 1.4c1.5 1.5 4 1.5 5.5 0l2.8-2.8c1.5-1.5 1.5-4.1 0-5.6z"/></svg> : <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>}
+                        {isLinked ? <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M13.2 7.8l-1.4-1.4c-1.5-1.5-4-1.5-5.5 0l-2.8 2.8c-1.5 1.5-1.5 4 0 5.5l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.7-.7-.7-2 0-2.8l2.8-2.8c.8-.8 2-.8 2.8 0l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l1.4 1.4c1.5 1.5 4 1.5 5.5 0l2.8-2.8c1.5-1.5 1.5-4.1 0-5.6z"/></svg> : <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>}
                       </button>
                       <span className="text-[10px] text-gray-500">宽:</span>
                       <input type="number" value={customW} onChange={e => handleCustomWChange(e.target.value)} className="w-12 px-1 py-1 text-[11px] font-bold text-center border rounded outline-none" />
@@ -504,12 +508,8 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
         <button onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))} disabled={currentIndex === 0} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
         </button>
-        {/* 🌟 核心修改：动态变脸的按钮文案与颜色 */}
         <button onClick={handleExecuteAll} className={`flex-1 h-10 text-white rounded-lg text-[13px] font-bold shadow-md active:scale-95 transition-all ${mode === 'resize' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-[#0B1527] hover:bg-black'}`}>
-          {mode === 'resize' 
-            ? `执行当前图像 (${currentIndex + 1} / ${selectedImages.length})` 
-            : `执行选中图像 (${selectedImages.length}张)`
-          }
+          {mode === 'resize' ? `执行当前图像 (${currentIndex + 1} / ${selectedImages.length})` : `裁切 (${selectedImages.length}张)`}
         </button>
         <button onClick={() => setCurrentIndex(prev => Math.min(selectedImages.length - 1, prev + 1))} disabled={currentIndex === selectedImages.length - 1} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>

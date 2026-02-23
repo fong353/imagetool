@@ -13,6 +13,7 @@ interface ImageGridProps {
   onDeselectAll: () => void;
   onClearAll: () => void;
   onRemoveSelected: () => void;
+  // 🌟 接收新属性
   activeTab?: string;
   replicateCounts?: Record<string, number>;
   onUpdateCount?: (path: string, count: number) => void;
@@ -24,38 +25,25 @@ export default function ImageGrid({
   activeTab, replicateCounts, onUpdateCount
 }: ImageGridProps) {
   const selectedCount = images.filter(img => img.selected && img.isSupported).length;
-  
-  // 🌟 新增状态：记录当前正在编辑哪张图片的份数
   const [editingPath, setEditingPath] = useState<string | null>(null);
 
   return (
-    <div className={`flex-1 flex flex-col border-2 border-dashed rounded-3xl transition-all duration-300 ease-out overflow-hidden relative ${
-      isDragging ? "border-blue-500 bg-blue-50/50 scale-[1.01] shadow-inner" : "border-gray-300 bg-white shadow-sm"
-    }`}>
+    <div className={`flex-1 flex flex-col border-2 border-dashed rounded-3xl transition-all duration-300 ease-out overflow-hidden relative ${isDragging ? "border-blue-500 bg-blue-50/50 scale-[1.01] shadow-inner" : "border-gray-300 bg-white shadow-sm"}`}>
       {images.length > 0 && (
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-gray-50/50">
           <div className="flex items-center gap-4">
             <span className="text-sm font-medium text-gray-500">已加载 {images.length} 项</span>
             <div className="flex items-center gap-2 bg-gray-200/50 px-3 py-1.5 rounded-full border border-gray-200/80 shadow-inner">
               <span className="text-xs text-gray-400 opacity-80">🔍</span>
-              <input 
-                type="range" min="100" max="350" step="1" value={zoomWidth} 
-                onChange={(e) => setZoomWidth(Number(e.target.value))}
-                className="w-20 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-600 transition-all"
-              />
-              {zoomWidth !== DEFAULT_ZOOM && (
-                <button onClick={() => setZoomWidth(DEFAULT_ZOOM)} className="text-[10px] font-medium text-gray-400 hover:text-blue-500 active:scale-90 transition-all" title="复位缩放">REST</button>
-              )}
+              <input type="range" min="100" max="350" step="1" value={zoomWidth} onChange={(e) => setZoomWidth(Number(e.target.value))} className="w-20 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-600 transition-all" />
             </div>
           </div>
           <div className="flex gap-2 items-center">
-            <button onClick={onSelectAll} className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors">全选合法项</button>
+            <button onClick={onSelectAll} className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors">全选</button>
             <button onClick={onDeselectAll} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">取消</button>
-            <button onClick={onRemoveSelected} disabled={selectedCount === 0} title="移除选中的图片" className={`flex items-center justify-center p-1.5 rounded-lg border transition-colors ${selectedCount > 0 ? "border-orange-200 text-orange-500 hover:bg-orange-50 bg-white shadow-sm" : "border-gray-200 text-gray-300 bg-gray-50/50 cursor-not-allowed"}`}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </button>
+            
             <div className="w-px h-5 bg-gray-200 mx-1"></div>
-            <button onClick={onClearAll} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-300 transition-colors">一键清空</button>
+            <button onClick={onClearAll} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors">一键清空</button>
           </div>
         </div>
       )}
@@ -67,50 +55,27 @@ export default function ImageGrid({
               {zoomWidth > 100 ? (
                 <div className={`relative aspect-square rounded-xl overflow-hidden border shadow-sm flex items-center justify-center p-3 ${img.isSupported ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'}`}>
                   {img.isSupported ? (
-                    
                     <img src={img.url || undefined} alt={`Preview ${index}`} className="max-w-full max-h-full object-contain border-[1.5px] border-green-400/80 rounded-sm shadow-sm transition-transform duration-300 group-hover:scale-105" />
                   ) : (
                     <svg className="w-12 h-12 text-red-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                   )}
                   <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md backdrop-blur-sm font-mono z-10">{index + 1}</div>
                   
-                  {/* 🌟 核心修复：内联式数量修改器，规避 Tauri 弹窗限制 */}
+                  {/* 🌟 内联紫色修改器 */}
                   {activeTab === 'replicate' && img.isSupported && (
                     <div 
-                      onClick={(e) => {
-                        e.stopPropagation(); // 阻止触发图片选中
-                        setEditingPath(img.path);
-                      }}
-                      className={`absolute bottom-2 right-2 text-[11px] font-bold px-2 py-1 rounded-lg shadow-lg cursor-pointer transition-all z-20 border min-w-[36px] flex justify-center items-center ${
-                        editingPath === img.path 
-                        ? "bg-white text-purple-700 border-purple-500 scale-110" 
-                        : "bg-purple-600 text-white border-purple-400 hover:bg-purple-700 active:scale-95"
-                      }`}
+                      onClick={(e) => { e.stopPropagation(); setEditingPath(img.path); }}
+                      className={`absolute bottom-2 right-2 text-[11px] font-bold px-2 py-1 rounded-lg shadow-lg cursor-pointer transition-all z-20 border min-w-[36px] flex justify-center items-center ${editingPath === img.path ? "bg-white text-purple-700 border-purple-500 scale-110" : "bg-purple-600 text-white border-purple-400 hover:bg-purple-700 active:scale-95"}`}
                     >
                       {editingPath === img.path ? (
                         <input
-                          autoFocus
-                          type="number"
-                          min={1}
-                          defaultValue={replicateCounts?.[img.path] || 1}
-                          onClick={(e) => e.stopPropagation()} // 防止点击输入框时触发图片选中
-                          onBlur={(e) => {
-                            const val = Math.max(1, parseInt(e.target.value) || 1);
-                            onUpdateCount?.(img.path, val);
-                            setEditingPath(null); // 失去焦点时保存并恢复标签状态
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              const val = Math.max(1, parseInt(e.currentTarget.value) || 1);
-                              onUpdateCount?.(img.path, val);
-                              setEditingPath(null); // 回车时保存并恢复标签状态
-                            }
-                          }}
+                          autoFocus type="number" min={1} defaultValue={replicateCounts?.[img.path] || 1}
+                          onClick={(e) => e.stopPropagation()}
+                          onBlur={(e) => { onUpdateCount?.(img.path, Math.max(1, parseInt(e.target.value) || 1)); setEditingPath(null); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { onUpdateCount?.(img.path, Math.max(1, parseInt(e.currentTarget.value) || 1)); setEditingPath(null); } }}
                           className="w-6 bg-transparent outline-none text-center font-bold p-0 m-0 text-purple-700"
                         />
-                      ) : (
-                        <span>{replicateCounts?.[img.path] || 1} 张</span>
-                      )}
+                      ) : ( <span>{replicateCounts?.[img.path] || 1} 张</span> )}
                     </div>
                   )}
 
@@ -139,7 +104,6 @@ export default function ImageGrid({
         <div className="flex-1 flex flex-col items-center justify-center text-center pointer-events-none">
           <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
           <p className="text-lg text-gray-600 font-medium">将需要处理的文件拖拽至此</p>
-          <p className="mt-2 text-sm text-gray-400">仅支持 JPG 和 TIF 格式，其他文件将标红处理</p>
         </div>
       )}
     </div>
