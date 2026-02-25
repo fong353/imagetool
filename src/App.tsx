@@ -105,7 +105,7 @@ export default function App() {
           return img;
        }));
        setImages(updatedImages);
-       alert(`✅ 处理完成！\n成功排版 ${successCount} 张图片。`);
+       //alert(`✅ 处理完成！\n成功排版 ${successCount} 张图片。`);
     } else { alert("❌ 处理失败，请查看控制台。"); }
   };
 
@@ -162,7 +162,7 @@ export default function App() {
             setImages(prev => prev.map(p => p.path === img.path ? { ...p, size, url } : p));
           } catch(e){}
         });
-        alert(`✅ 复制成功！共生成 ${allNewPaths.length} 个文件。`);
+        //alert(`✅ 复制成功！共生成 ${allNewPaths.length} 个文件。`);
       } else { alert("⚠️ 所有选中项份数均为 1，无需执行复制。"); }
     } catch (e) { alert("复制失败: " + e); }
   };

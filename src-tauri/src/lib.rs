@@ -4,6 +4,9 @@ use base64::{engine::general_purpose, Engine as _};
 // ==========================================
 // 🌟 辅助引擎：跨平台 Magick 唤醒器
 // ==========================================
+// ==========================================
+// 🌟 辅助引擎：跨平台 Magick 唤醒器 (终极无黑框版)
+// ==========================================
 fn magick_command() -> std::process::Command {
     #[cfg(target_os = "macos")]
     {
@@ -12,8 +15,16 @@ fn magick_command() -> std::process::Command {
         } else if Path::new("/usr/local/bin/magick").exists() {
             return std::process::Command::new("/usr/local/bin/magick");
         }
+        std::process::Command::new("magick")
     }
-    std::process::Command::new("magick")
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt; // 引入 Windows 专属扩展
+        let mut cmd = std::process::Command::new("magick");
+        cmd.creation_flags(0x08000000); // 🚀 核心魔法：CREATE_NO_WINDOW，彻底隐藏黑框！
+        cmd
+    }
 }
 
 // ==========================================
@@ -55,13 +66,20 @@ fn generate_thumbnail(path_str: String) -> Result<String, String> {
     
     if ext == "jpg" || ext == "jpeg" || ext == "png" {
         #[cfg(target_os = "windows")]
-        let final_path = path_str.replace("\\", "/");
+        {
+            // Windows 必须走 http://asset.localhost/ 协议
+            // 并且要把反斜杠换成斜杠，把盘符的冒号(如 C:) 转码成 C%3A
+            let final_path = path_str.replace("\\", "/").replacen(":", "%3A", 1);
+            return Ok(format!("http://asset.localhost/{}", final_path));
+        }
         #[cfg(not(target_os = "windows"))]
-        let final_path = path_str;
-        
-        return Ok(format!("asset://localhost/{}", final_path));
+        {
+            // Mac 保持原样，极其稳定
+            return Ok(format!("asset://localhost/{}", path_str));
+        }
     }
 
+    // 处理 PSD/TIFF 等需要借用 Magick 算力的情况（生成 Base64）
     let target_layer = format!("{}[0]", path_str);
     let output = magick_command()
         .args([&target_layer, "-background", "white", "-flatten", "-resize", "400x400>", "-strip", "jpeg:-"])
@@ -69,7 +87,9 @@ fn generate_thumbnail(path_str: String) -> Result<String, String> {
 
     if output.status.success() {
         Ok(format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&output.stdout)))
-    } else { Err("生成预览图失败".to_string()) }
+    } else { 
+        Err("生成预览图失败".to_string()) 
+    }
 }
 
 // ==========================================
