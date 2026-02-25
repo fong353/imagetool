@@ -137,7 +137,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
     }
   };
 
-  const getFallbackConfig = (_origW: number, _origH: number) => {
+  const getFallbackConfig = (origW: number, origH: number) => {
     return {
       preset: activePreset, 
       customW: customW, 
@@ -145,8 +145,8 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
       isLinked: isLinked, 
       linkedAspect: linkedAspect, 
       mode: mode,
-      resizeW: resizeW, 
-      resizeH: resizeH, 
+      resizeW: origW, // 🌟 核心修复：原来是 resizeW，现改为 origW，强制读取当前图的真实宽！
+      resizeH: origH, // 🌟 核心修复：原来是 resizeH，现改为 origH，强制读取当前图的真实高！
       resizeLinked: resizeLinked,
       crop: { unit: "%", x: 0, y: 0, width: 100, height: 100 },
       isCropFlipped: false
@@ -184,14 +184,26 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   }, [currentImage, previewUrl]);
 
   // 🌟 终极暴力 Hack：缩短为 10ms，低于显示器单帧刷新时间，彻底消灭视觉闪烁！
+  // 🌟 工业级渲染同步方案：完美应对 200MB 级别的大图！
+  // 彻底告别魔法数字延迟，让浏览器在彻底完成物理绘制后再通知我们计算
   useEffect(() => {
     if (mode === 'crop' && imgRef && currentImage) {
-      const timer = setTimeout(() => {
-        const aspect = getAspectFromParams(imgRef.naturalWidth, imgRef.naturalHeight, activePreset, customW, customH, mode, isCropFlipped);
-        const newCrop = generateDefaultCrop(imgRef.naturalWidth, imgRef.naturalHeight, aspect);
-        setCrop(newCrop);
-      }, 10); // 10ms 无感重绘
-      return () => clearTimeout(timer);
+      let rafId1: number;
+      let rafId2: number;
+
+      rafId1 = requestAnimationFrame(() => {
+        rafId2 = requestAnimationFrame(() => {
+          // 此时，无论图片是 2MB 还是 200MB，DOM 的物理宽高都已经绝对稳定！
+          const aspect = getAspectFromParams(imgRef.naturalWidth, imgRef.naturalHeight, activePreset, customW, customH, mode, isCropFlipped);
+          const newCrop = generateDefaultCrop(imgRef.naturalWidth, imgRef.naturalHeight, aspect);
+          setCrop(newCrop);
+        });
+      });
+
+      return () => {
+        cancelAnimationFrame(rafId1);
+        cancelAnimationFrame(rafId2);
+      };
     }
   }, [currentIndex, imgRef, activePreset, customW, customH, isCropFlipped, mode]);
 

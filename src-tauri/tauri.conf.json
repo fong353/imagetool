@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "墨印众合-imagetool",
+  "productName": "墨印众合-imagetool v1.0.0",
   "version": "0.1.0",
   "identifier": "com.g.imagetool",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "墨印众合-imagetool",
+        "title": "墨印众合-imagetool v1.0.0",
         "width": 800,
         "height": 600
       }
