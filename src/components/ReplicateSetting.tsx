@@ -1,9 +1,11 @@
 interface ReplicateSettingProps {
   selectedCount: number;
   onExecute: () => void;
+  onSyncToCost: () => void;
+  replicateLocked: boolean;
 }
 
-export default function ReplicateSetting({ selectedCount, onExecute }: ReplicateSettingProps) {
+export default function ReplicateSetting({ selectedCount, onExecute, onSyncToCost, replicateLocked }: ReplicateSettingProps) {
   return (
     <div className="flex flex-col h-full bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center items-center justify-center">
       <div className="w-16 h-16 bg-purple-50 text-purple-500 rounded-2xl flex items-center justify-center mb-4 shadow-inner">
@@ -11,13 +13,21 @@ export default function ReplicateSetting({ selectedCount, onExecute }: Replicate
       </div>
       <h3 className="text-lg font-bold text-gray-800 mb-2">多份复制模式</h3>
       <p className="text-xs text-gray-400 mb-6 leading-relaxed">
-        请在左侧预览图中点击<span className="text-purple-600 font-bold mx-1">紫色标签</span>修改打印份数。<br/>
-        系统将按 1-N 格式自动裂变重命名。
+        请在左侧预览图中点击<span className="text-purple-600 font-bold mx-1">紫色标签</span>修改每个文件份数。<br/>
+        复制将对全部可用文件生效（无需勾选）。
       </p>
-      <button onClick={onExecute} disabled={selectedCount === 0} className="w-full py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-200 text-white rounded-2xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
-        <span>执行复制裂变</span>
-        {selectedCount > 0 && <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px]">{selectedCount}项</span>}
-      </button>
+      <div className="w-full flex flex-col gap-3">
+        <button onClick={onSyncToCost} className="py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+          <span>核算</span>
+        </button>
+        <button onClick={onExecute} disabled={selectedCount === 0 || replicateLocked} className="py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-200 text-white rounded-2xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+          <span>复制多份到本地</span>
+          {selectedCount > 0 && <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px]">{selectedCount}项</span>}
+        </button>
+      </div>
+      {replicateLocked && (
+        <p className="text-[11px] text-gray-400 mt-3">已执行过一次复制，请先一键清空并重新导入文件后再执行。</p>
+      )}
     </div>
   );
 }

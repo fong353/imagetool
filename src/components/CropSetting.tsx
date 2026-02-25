@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import ReactCrop, { Crop, centerCrop, makeAspectCrop, PercentCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { ImageItem } from "../types";
@@ -46,6 +47,8 @@ const parseSize = (sizeStr?: string): [number, number] => {
 export default function CropSetting({ selectedImages, onProcessAll }: CropSettingProps) {
   const [ , setConfigs] = useState<Record<string, ImageConfig>>({});
   const configsRef = useRef<Record<string, ImageConfig>>({});
+
+  const [currentDpi, setCurrentDpi] = useState<number | null>(null);
   
   const loadedImagePathRef = useRef<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -180,6 +183,17 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
       setPreviewUrl(currentImage.url);
       setImgRef(null);
       loadedImagePathRef.current = null; 
+    }
+    // 当预览改变或当前图片改变时，获取结构化元数据（包含 DPI）
+    if (currentImage) {
+      invoke("get_image_meta", { pathStr: currentImage.path })
+        .then((m: any) => {
+          if (m && typeof m.dpi === 'number') setCurrentDpi(m.dpi);
+          else setCurrentDpi(null);
+        })
+        .catch(() => setCurrentDpi(null));
+    } else {
+      setCurrentDpi(null);
     }
   }, [currentImage, previewUrl]);
 
@@ -485,6 +499,13 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
           </div>
         )}
       </div>
+
+      {/* DPI 警告：当探测到 DPI 低于 100 时在渲染框下部展示 */}
+      {currentDpi !== null && currentDpi < 100 && (
+        <div className="mb-2 px-3 py-2 w-full text-sm rounded-md bg-yellow-50 border border-yellow-200 text-yellow-800">
+          <strong className="font-bold">警告：</strong> 图像分辨率 {currentDpi.toFixed(0)} DPI，低于 100 DPI，打印可能失真或模糊。
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar">
         <div className={`border-2 rounded-xl overflow-hidden transition-all duration-300 ${mode !== 'resize' ? 'border-blue-400 shadow-sm bg-white' : 'border-gray-200 bg-gray-50/50 hover:border-blue-200 cursor-pointer'}`}>

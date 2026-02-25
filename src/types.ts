@@ -9,6 +9,7 @@ export interface ImageItem {
   selected: boolean;
   size: string;
   isSupported: boolean;
+  dpi?: number;  // DPI 分辨率
 }
 
 export interface ProcessProgress {

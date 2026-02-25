@@ -1,5 +1,6 @@
 use std::path::Path;
 use base64::{engine::general_purpose, Engine as _};
+use serde::Serialize;
 
 // ==========================================
 // 🌟 辅助引擎：跨平台 Magick 唤醒器
@@ -54,6 +55,53 @@ fn get_image_size(path_str: String) -> Result<String, String> {
             }
         }
         Ok(format!("{:.1} x {:.1} cm", (w_px / dpi) * 2.54, (h_px / dpi) * 2.54))
+    } else { Err("解析尺寸失败".to_string()) }
+}
+
+// ==========================================
+// 🌟 新增：结构化元数据探针（供前端获取 dpi 等信息）
+// ==========================================
+#[derive(Serialize)]
+struct ImageMeta {
+    width_px: u32,
+    height_px: u32,
+    dpi: f32,
+    unit: String,
+}
+
+#[tauri::command]
+fn get_image_meta(path_str: String) -> Result<ImageMeta, String> {
+    let output = magick_command()
+        .args(["identify", "-format", "%w %h %x %U\n", &path_str])
+        .output().map_err(|e| format!("启动探测引擎失败: {}", e))?;
+
+    if !output.status.success() { return Err("解析尺寸失败".to_string()); }
+
+    let dim_str = String::from_utf8_lossy(&output.stdout);
+    let first_line = dim_str.lines().next().unwrap_or("");
+    let dims: Vec<&str> = first_line.trim().split_whitespace().collect();
+
+    if dims.len() >= 2 {
+        let w_px: u32 = dims[0].parse().unwrap_or(0);
+        let h_px: u32 = dims[1].parse().unwrap_or(0);
+        let mut dpi: f32 = 300.0;
+        let mut unit = String::from("PixelsPerInch");
+
+        if dims.len() >= 3 {
+            let parsed_dpi: f32 = dims[2].parse().unwrap_or(0.0);
+            if parsed_dpi > 0.0 {
+                dpi = parsed_dpi;
+                if dims.len() >= 4 {
+                    unit = dims[3].to_string();
+                    if unit.to_lowercase().contains("centimeter") {
+                        // 当单位是每厘米时，将单位含义与 DPI 对齐
+                        dpi *= 2.54;
+                    }
+                }
+            }
+        }
+
+        Ok(ImageMeta { width_px: w_px, height_px: h_px, dpi, unit })
     } else { Err("解析尺寸失败".to_string()) }
 }
 
@@ -275,7 +323,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            rename_files, get_image_size, generate_thumbnail, process_image, replicate_image 
+            rename_files, get_image_size, get_image_meta, generate_thumbnail, process_image, replicate_image 
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
