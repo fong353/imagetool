@@ -10,3 +10,11 @@ export interface ImageItem {
   size: string;
   isSupported: boolean;
 }
+
+export interface ProcessProgress {
+  isProcessing: boolean;
+  current: number;
+  total: number;
+  currentName: string;
+  statusMessage: string;
+}

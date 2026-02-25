@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { invoke } from "@tauri-apps/api/core";
-import { ImageItem } from "./types";
+import { ImageItem, ProcessProgress } from "./types";
 import Sidebar from "./components/Sidebar";
 import ImageGrid, { DEFAULT_ZOOM } from "./components/ImageGrid";
 import { PAPER_CATEGORIES } from "./components/PaperSetting";
 import CropSetting, { ProcessPayload } from "./components/CropSetting";
-import ReplicateSetting from "./components/ReplicateSetting"; 
+import ReplicateSetting from "./components/ReplicateSetting";
+import ProgressBar from "./components/ProgressBar"; 
 
 export default function App() {
   const [images, setImages] = useState<ImageItem[]>([]);
@@ -22,6 +23,14 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"paper" | "crop" | "replicate">("crop");
   
   const [replicateCounts, setReplicateCounts] = useState<Record<string, number>>({});
+
+  const [progress, setProgress] = useState<ProcessProgress>({
+    isProcessing: false,
+    current: 0,
+    total: 0,
+    currentName: "",
+    statusMessage: "准备处理..."
+  });
 
   useEffect(() => {
     const unlistenPromise = getCurrentWebview().onDragDropEvent((event) => {
@@ -70,10 +79,30 @@ export default function App() {
 
   const handleProcessAll = async (payloads: ProcessPayload[]) => {
     if (payloads.length === 0) return alert("⚠️ 提示：请先选中至少一张图片！");
+    
     let successCount = 0;
     const processedMap = new Map<string, {newPath: string, newName: string}>();
     
-    for (const payload of payloads) {
+    setProgress({
+      isProcessing: true,
+      current: 0,
+      total: payloads.length,
+      currentName: "",
+      statusMessage: "初始化中..."
+    });
+    
+    for (let i = 0; i < payloads.length; i++) {
+      const payload = payloads[i];
+      const fileName = payload.image.name || "未知文件";
+      
+      setProgress({
+        isProcessing: true,
+        current: i,
+        total: payloads.length,
+        currentName: fileName,
+        statusMessage: `正在处理 (${i + 1}/${payloads.length})`
+      });
+      
       try {
         const [newPath, newName] = await invoke<[string, string]>("process_image", {
           pathStr: payload.image.path, mode: payload.mode, targetWCm: payload.targetW, targetHCm: payload.targetH,
@@ -81,8 +110,20 @@ export default function App() {
         });
         successCount++;
         processedMap.set(payload.image.path, {newPath, newName});
-      } catch (error) { console.error(`❌ 处理失败:`, error); }
+      } catch (error) { 
+        console.error(`❌ 处理失败:`, error);
+        setProgress(prev => ({
+          ...prev,
+          statusMessage: `处理失败: ${error}`
+        }));
+      }
     }
+
+    setProgress(prev => ({
+      ...prev,
+      current: payloads.length,
+      statusMessage: "正在更新缓存..."
+    }));
 
     if (successCount > 0) {
        const updatedImages = await Promise.all(images.map(async (img) => {
@@ -105,17 +146,59 @@ export default function App() {
           return img;
        }));
        setImages(updatedImages);
-       //alert(`✅ 处理完成！\n成功排版 ${successCount} 张图片。`);
-    } else { alert("❌ 处理失败，请查看控制台。"); }
+       
+       setProgress({
+         isProcessing: false,
+         current: payloads.length,
+         total: payloads.length,
+         currentName: "",
+         statusMessage: ""
+       });
+       
+       alert(`✅ 处理完成！\n成功排版 ${successCount} 张图片。`);
+    } else { 
+      setProgress({
+        isProcessing: false,
+        current: 0,
+        total: payloads.length,
+        currentName: "",
+        statusMessage: ""
+      });
+      alert("❌ 处理失败，请查看控制台。"); 
+    }
   };
 
   const handleRename = async () => {
     if (selectedImages.length === 0) return;
+    
     try {
+      setProgress({
+        isProcessing: true,
+        current: 0,
+        total: selectedImages.length,
+        currentName: "",
+        statusMessage: "初始化中..."
+      });
+      
       const finalPaperType = customPaper.trim() !== "" ? customPaper.trim() : activePaper;
       const finalPrefix = `${finalPaperType}-${activeCraft}`;
-      const payload = selectedImages.map((img) => [img.path, finalPrefix]);
+      const payload = selectedImages.map((img, idx) => {
+        setProgress({
+          isProcessing: true,
+          current: idx,
+          total: selectedImages.length,
+          currentName: img.name,
+          statusMessage: `正在重命名 (${idx + 1}/${selectedImages.length})`
+        });
+        return [img.path, finalPrefix];
+      });
+      
       const renamedData = await invoke<[string, string, string][]>("rename_files", { filesToProcess: payload });
+      
+      setProgress(prev => ({
+        ...prev,
+        statusMessage: "正在更新缓存..."
+      }));
       
       const updatedImages = await Promise.all(images.map(async (img) => {
         const match = renamedData.find(([oldPath]) => oldPath === img.path);
@@ -130,20 +213,65 @@ export default function App() {
         }
         return img;
       }));
+      
       setImages(updatedImages);
-    } catch (error) { alert("处理失败了：" + error); }
+      
+      setProgress({
+        isProcessing: false,
+        current: selectedImages.length,
+        total: selectedImages.length,
+        currentName: "",
+        statusMessage: ""
+      });
+      
+      alert(`✅ 重命名完成！共处理 ${selectedImages.length} 张图片。`);
+    } catch (error) { 
+      setProgress({
+        isProcessing: false,
+        current: 0,
+        total: selectedImages.length,
+        currentName: "",
+        statusMessage: ""
+      });
+      alert("处理失败了：" + error); 
+    }
   };
 
   const handleReplicate = async () => {
     if (selectedImages.length === 0) return alert("请先选择图片！");
+    
     let allNewPaths: string[] = [];
+    
+    setProgress({
+      isProcessing: true,
+      current: 0,
+      total: selectedImages.length,
+      currentName: "",
+      statusMessage: "初始化中..."
+    });
+    
     try {
-      for (const img of selectedImages) {
+      for (let idx = 0; idx < selectedImages.length; idx++) {
+        const img = selectedImages[idx];
         const count = replicateCounts[img.path] || 1;
+        
+        setProgress({
+          isProcessing: true,
+          current: idx,
+          total: selectedImages.length,
+          currentName: img.name,
+          statusMessage: `正在复制 (${idx + 1}/${selectedImages.length})`
+        });
+        
         if (count <= 1) continue;
         const res = await invoke<string[]>("replicate_image", { pathStr: img.path, totalCopies: count });
         allNewPaths.push(...res);
       }
+
+      setProgress(prev => ({
+        ...prev,
+        statusMessage: "正在更新缓存..."
+      }));
 
       if (allNewPaths.length > 0) {
         const newImagesList: ImageItem[] = allNewPaths.map(path => ({
@@ -162,13 +290,41 @@ export default function App() {
             setImages(prev => prev.map(p => p.path === img.path ? { ...p, size, url } : p));
           } catch(e){}
         });
-        //alert(`✅ 复制成功！共生成 ${allNewPaths.length} 个文件。`);
-      } else { alert("⚠️ 所有选中项份数均为 1，无需执行复制。"); }
-    } catch (e) { alert("复制失败: " + e); }
+        
+        setProgress({
+          isProcessing: false,
+          current: selectedImages.length,
+          total: selectedImages.length,
+          currentName: "",
+          statusMessage: ""
+        });
+        
+        alert(`✅ 复制成功！共生成 ${allNewPaths.length} 个文件。`);
+      } else { 
+        setProgress({
+          isProcessing: false,
+          current: 0,
+          total: selectedImages.length,
+          currentName: "",
+          statusMessage: ""
+        });
+        alert("⚠️ 所有选中项份数均为 1，无需执行复制。"); 
+      }
+    } catch (e) { 
+      setProgress({
+        isProcessing: false,
+        current: 0,
+        total: selectedImages.length,
+        currentName: "",
+        statusMessage: ""
+      });
+      alert("复制失败: " + e); 
+    }
   };
 
   return (
     <div className="flex h-screen w-screen p-5 gap-4 bg-[#f3f4f6] text-gray-800 font-sans">
+      <ProgressBar progress={progress} />
       <ImageGrid 
         images={images} isDragging={isDragging} zoomWidth={zoomWidth} setZoomWidth={setZoomWidth}
         onToggleSelect={toggleSelect} onSelectAll={selectAll} onDeselectAll={deselectAll} 
