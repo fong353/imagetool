@@ -1,0 +1,110 @@
+name: Build Dual Versions
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build macOS (unchanged)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri (macOS default config)
+        run: npm run tauri build
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagetool-macos
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: error
+
+  build-windows-no-magick:
+    name: Build Windows (no bundled magick)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Create Windows config without externalBin
+        shell: pwsh
+        run: |
+          $config = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          if ($null -eq $config.bundle) {
+            $config | Add-Member -MemberType NoteProperty -Name bundle -Value @{}
+          }
+          $config.bundle.externalBin = @()
+          $config | ConvertTo-Json -Depth 100 | Set-Content "src-tauri/tauri.win.no-magick.conf.json" -Encoding utf8
+
+      - name: Build Tauri (Windows without bundled magick)
+        run: npm run tauri build -- --config src-tauri/tauri.win.no-magick.conf.json
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagetool-windows-no-magick
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-macos
+      - build-windows-no-magick
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: imagetool-macos
+          path: release-assets/macos
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: imagetool-windows-no-magick
+          path: release-assets/windows-no-magick
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release-assets/macos/**
+            release-assets/windows-no-magick/**
