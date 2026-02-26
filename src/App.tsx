@@ -113,7 +113,11 @@ export default function App() {
       try {
         const [newPath, newName] = await invoke<[string, string]>("process_image", {
           pathStr: payload.image.path, mode: payload.mode, targetWCm: payload.targetW, targetHCm: payload.targetH,
-          cropX: payload.cropData.x, cropY: payload.cropData.y, cropW: payload.cropData.w, cropH: payload.cropData.h
+          cropX: payload.cropData.x, cropY: payload.cropData.y, cropW: payload.cropData.w, cropH: payload.cropData.h,
+          borderTopCm: payload.borderTopCm ?? 0,
+          borderRightCm: payload.borderRightCm ?? 0,
+          borderBottomCm: payload.borderBottomCm ?? 0,
+          borderLeftCm: payload.borderLeftCm ?? 0
         });
         successCount++;
         processedMap.set(payload.image.path, {newPath, newName});

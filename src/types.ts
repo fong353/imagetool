@@ -1,6 +1,6 @@
 // src/types.ts
 
-export type ProcessMode = "crop" | "pad";
+export type ProcessMode = "crop" | "pad" | "resize" | "border";
 
 export interface ImageItem {
   path: string;

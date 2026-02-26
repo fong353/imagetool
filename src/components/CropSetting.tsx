@@ -9,6 +9,10 @@ export interface ProcessPayload {
   mode: string;
   targetW: number;
   targetH: number;
+  borderTopCm?: number;
+  borderRightCm?: number;
+  borderBottomCm?: number;
+  borderLeftCm?: number;
   cropData: {x: number, y: number, w: number, h: number};
 }
 
@@ -35,6 +39,11 @@ interface ImageConfig {
   resizeW: number | '';
   resizeH: number | '';
   resizeLinked: boolean;
+  borderLinked?: boolean;
+  borderTopCm?: number | '';
+  borderRightCm?: number | '';
+  borderBottomCm?: number | '';
+  borderLeftCm?: number | '';
   isCropFlipped?: boolean;
 }
 
@@ -73,6 +82,11 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
   const [resizeW, setResizeW] = useState<number | ''>(20);
   const [resizeH, setResizeH] = useState<number | ''>(20);
   const [resizeLinked, setResizeLinked] = useState<boolean>(true);
+  const [borderLinked, setBorderLinked] = useState<boolean>(true);
+  const [borderTopCm, setBorderTopCm] = useState<number | ''>(0.2);
+  const [borderRightCm, setBorderRightCm] = useState<number | ''>(0.2);
+  const [borderBottomCm, setBorderBottomCm] = useState<number | ''>(0.2);
+  const [borderLeftCm, setBorderLeftCm] = useState<number | ''>(0.2);
 
   const [mode, setMode] = useState<string>("crop");
   const [isCropFlipped, setIsCropFlipped] = useState<boolean>(false);
@@ -152,6 +166,11 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
       resizeW: origW, // 🌟 核心修复：原来是 resizeW，现改为 origW，强制读取当前图的真实宽！
       resizeH: origH, // 🌟 核心修复：原来是 resizeH，现改为 origH，强制读取当前图的真实高！
       resizeLinked: resizeLinked,
+      borderLinked: borderLinked,
+      borderTopCm: borderTopCm,
+      borderRightCm: borderRightCm,
+      borderBottomCm: borderBottomCm,
+      borderLeftCm: borderLeftCm,
       crop: { unit: "%", x: 0, y: 0, width: 100, height: 100 },
       isCropFlipped: false
     } as ImageConfig;
@@ -169,6 +188,11 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
        setMode(sourceConf.mode);
        setIsCropFlipped(sourceConf.isCropFlipped || false);
        setResizeW(sourceConf.resizeW); setResizeH(sourceConf.resizeH); setResizeLinked(sourceConf.resizeLinked);
+      setBorderLinked(sourceConf.borderLinked ?? true);
+       setBorderTopCm(sourceConf.borderTopCm ?? 0.2);
+       setBorderRightCm(sourceConf.borderRightCm ?? 0.2);
+       setBorderBottomCm(sourceConf.borderBottomCm ?? 0.2);
+       setBorderLeftCm(sourceConf.borderLeftCm ?? 0.2);
        
        if (conf) {
            setCrop(conf.crop); 
@@ -237,6 +261,11 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
       setActivePreset(conf.preset); setCustomW(conf.customW); setCustomH(conf.customH);
       setIsLinked(conf.isLinked); setLinkedAspect(conf.linkedAspect);
       setResizeW(conf.resizeW); setResizeH(conf.resizeH); setResizeLinked(conf.resizeLinked);
+      setBorderLinked(conf.borderLinked ?? true);
+      setBorderTopCm(conf.borderTopCm ?? 0.2);
+      setBorderRightCm(conf.borderRightCm ?? 0.2);
+      setBorderBottomCm(conf.borderBottomCm ?? 0.2);
+      setBorderLeftCm(conf.borderLeftCm ?? 0.2);
       setMode(conf.mode); setCrop(conf.crop); setIsCropFlipped(conf.isCropFlipped || false);
     } else {
       const fallback = getFallbackConfig(origW, origH);
@@ -247,6 +276,11 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
         preset: fallback.preset, customW: fallback.customW, customH: fallback.customH, 
         isLinked: fallback.isLinked, linkedAspect: fallback.linkedAspect, mode: fallback.mode, crop: newCrop,
         resizeW: fallback.resizeW, resizeH: fallback.resizeH, resizeLinked: fallback.resizeLinked,
+        borderLinked: fallback.borderLinked,
+        borderTopCm: fallback.borderTopCm,
+        borderRightCm: fallback.borderRightCm,
+        borderBottomCm: fallback.borderBottomCm,
+        borderLeftCm: fallback.borderLeftCm,
         isCropFlipped: fallback.isCropFlipped || false
       });
       setIsCropFlipped(fallback.isCropFlipped || false);
@@ -378,6 +412,74 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
     if (currentImage) updateConfig(currentImage.path, { mode: m }); 
   };
 
+  const handleBorderSideChange = (side: "top" | "right" | "bottom" | "left", val: string) => {
+    const num: number | '' = val === '' ? '' : Number(val);
+    const safe = num === '' ? '' : Math.max(0, num);
+
+    if (borderLinked) {
+      setBorderTopCm(safe);
+      setBorderRightCm(safe);
+      setBorderBottomCm(safe);
+      setBorderLeftCm(safe);
+    } else {
+      if (side === "top") setBorderTopCm(safe);
+      if (side === "right") setBorderRightCm(safe);
+      if (side === "bottom") setBorderBottomCm(safe);
+      if (side === "left") setBorderLeftCm(safe);
+    }
+
+    const numericBorder = safe === '' ? 0 : safe;
+    setConfigs(prev => {
+      const next = { ...prev };
+      selectedImages.forEach((img) => {
+        const base = next[img.path] || getFallbackConfig(...parseSize(img.size));
+        const updated: ImageConfig = {
+          ...base,
+          borderLinked: borderLinked,
+          borderTopCm: borderLinked ? numericBorder : (side === "top" ? numericBorder : (base.borderTopCm ?? 0)),
+          borderRightCm: borderLinked ? numericBorder : (side === "right" ? numericBorder : (base.borderRightCm ?? 0)),
+          borderBottomCm: borderLinked ? numericBorder : (side === "bottom" ? numericBorder : (base.borderBottomCm ?? 0)),
+          borderLeftCm: borderLinked ? numericBorder : (side === "left" ? numericBorder : (base.borderLeftCm ?? 0))
+        };
+        next[img.path] = updated;
+        configsRef.current[img.path] = updated;
+      });
+      return next;
+    });
+  };
+
+  const toggleBorderLink = () => {
+    const nextLinked = !borderLinked;
+    setBorderLinked(nextLinked);
+
+    setConfigs(prev => {
+      const next = { ...prev };
+      selectedImages.forEach((img) => {
+        const base = next[img.path] || getFallbackConfig(...parseSize(img.size));
+        const syncValue = Number(borderTopCm) || 0;
+        const updated: ImageConfig = {
+          ...base,
+          borderLinked: nextLinked,
+          borderTopCm: nextLinked ? syncValue : (base.borderTopCm ?? borderTopCm ?? 0),
+          borderRightCm: nextLinked ? syncValue : (base.borderRightCm ?? borderRightCm ?? 0),
+          borderBottomCm: nextLinked ? syncValue : (base.borderBottomCm ?? borderBottomCm ?? 0),
+          borderLeftCm: nextLinked ? syncValue : (base.borderLeftCm ?? borderLeftCm ?? 0),
+        };
+        next[img.path] = updated;
+        configsRef.current[img.path] = updated;
+      });
+      return next;
+    });
+
+    if (nextLinked) {
+      const syncValue = Number(borderTopCm) || 0;
+      setBorderTopCm(syncValue);
+      setBorderRightCm(syncValue);
+      setBorderBottomCm(syncValue);
+      setBorderLeftCm(syncValue);
+    }
+  };
+
   const handleSavePreset = () => {
     if (!newPresetLabel.trim() || !newPresetW || !newPresetH) return alert("请填写完整的模版名称、宽度和高度！");
     if (presets.some(p => p.label === newPresetLabel.trim())) return alert("该模版名称已存在，请换一个名称！");
@@ -423,9 +525,19 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
             newConfigsToSave[img.path] = conf; 
           }
 
-          let outW = 20, outH = 20, px = 0, py = 0, pw = 100, ph = 100, finalMode = conf.mode;
+          let outW = 20, outH = 20, px = 0, py = 0, pw = 100, ph = 100;
+          const finalMode =
+            mode === "border"
+              ? "border"
+              : mode === "crop" || mode === "pad"
+                ? mode
+                : conf.mode;
           if (finalMode === "resize") {
              outW = Number(conf.resizeW) || 1; outH = Number(conf.resizeH) || 1;
+           } else if (finalMode === "border") {
+             const [curW, curH] = parseSize(img.size);
+             outW = curW;
+             outH = curH;
           } else {
              if (conf.preset === "图像尺寸") { outW = Number(conf.customW) || 1; outH = Number(conf.customH) || 1; } 
              else { const p = presets.find(x => x.label === conf.preset); outW = p ? p.w : 20; outH = p ? p.h : 20; }
@@ -448,7 +560,17 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
             let [fileRawW, fileRawH] = parseSize(img.size);
             if ((fileRawW > fileRawH) !== (outW > outH)) { const temp = outW; outW = outH; outH = temp; }
           }
-          payloads.push({ image: img, mode: finalMode, targetW: outW, targetH: outH, cropData: { x: px, y: py, w: pw, h: ph } });
+          payloads.push({
+            image: img,
+            mode: finalMode,
+            targetW: outW,
+            targetH: outH,
+            borderTopCm: finalMode === "border" ? (borderTopCm === '' ? Number(conf.borderTopCm ?? 0) : Number(borderTopCm)) : 0,
+            borderRightCm: finalMode === "border" ? (borderRightCm === '' ? Number(conf.borderRightCm ?? 0) : Number(borderRightCm)) : 0,
+            borderBottomCm: finalMode === "border" ? (borderBottomCm === '' ? Number(conf.borderBottomCm ?? 0) : Number(borderBottomCm)) : 0,
+            borderLeftCm: finalMode === "border" ? (borderLeftCm === '' ? Number(conf.borderLeftCm ?? 0) : Number(borderLeftCm)) : 0,
+            cropData: { x: px, y: py, w: pw, h: ph }
+          });
         });
 
         onProcessAll(payloads);
@@ -478,6 +600,8 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
     );
   }
 
+  const isModuleAActive = mode === "crop" || mode === "pad";
+
   return (
     <div className="flex flex-col flex-1 bg-white p-3 rounded-xl shadow-sm border border-gray-100 h-full min-h-0 relative">
       <div className="w-full h-48 bg-gray-50/80 rounded-lg overflow-hidden mb-3 border border-gray-200 flex flex-col items-center justify-center p-1.5 shrink-0 relative group">
@@ -496,6 +620,35 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
           >
             <img src={previewUrl} alt="Preview" onLoad={handleImageLoad} style={{ display: 'block', maxWidth: '100%', maxHeight: '176px', width: 'auto', height: 'auto' }} />
           </ReactCrop>
+        ) : mode === "border" ? (
+          <div
+            className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative"
+            style={{
+              aspectRatio: (() => {
+                const [w, h] = parseSize(currentImage?.size);
+                const bL = Number(borderLeftCm) || 0;
+                const bR = Number(borderRightCm) || 0;
+                const bT = Number(borderTopCm) || 0;
+                const bB = Number(borderBottomCm) || 0;
+                return (w + bL + bR) / (h + bT + bB);
+              })(),
+              maxHeight: "176px",
+              maxWidth: "100%",
+              padding: "0px"
+            }}
+          >
+            <div
+              className="w-full h-full bg-white border border-gray-300 flex items-center justify-center"
+              style={{
+                paddingTop: `${Math.min(35, Math.max(0, (Number(borderTopCm) || 0) * 10))}%`,
+                paddingRight: `${Math.min(35, Math.max(0, (Number(borderRightCm) || 0) * 10))}%`,
+                paddingBottom: `${Math.min(35, Math.max(0, (Number(borderBottomCm) || 0) * 10))}%`,
+                paddingLeft: `${Math.min(35, Math.max(0, (Number(borderLeftCm) || 0) * 10))}%`
+              }}
+            >
+              <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="w-full h-full object-contain" />
+            </div>
+          </div>
         ) : (
           <div className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative" style={{ aspectRatio: mode === 'resize' ? (Number(resizeW) || 1) / (Number(resizeH) || 1) : getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH, mode, isCropFlipped), maxHeight: '176px', maxWidth: '100%', padding: '0px' }}>
             <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="w-full h-full object-contain" />
@@ -511,14 +664,14 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
       )}
 
       <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar">
-        <div className={`border-2 rounded-xl overflow-hidden transition-all duration-300 ${mode !== 'resize' ? 'border-blue-400 shadow-sm bg-white' : 'border-gray-200 bg-gray-50/50 hover:border-blue-200 cursor-pointer'}`}>
-          <div className={`p-2 flex items-center gap-2 ${mode !== 'resize' ? 'bg-blue-50 border-b border-blue-100' : ''}`} onClick={() => !disabled && mode === 'resize' && handleSetMode('crop')}>
-             <div className={`w-3.5 h-3.5 rounded-full border-2 flex flex-shrink-0 items-center justify-center ${mode !== 'resize' ? 'border-blue-600 bg-blue-600' : 'border-gray-400'}`}>
-               {mode !== 'resize' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+        <div className={`border-2 rounded-xl overflow-hidden transition-all duration-300 ${isModuleAActive ? 'border-blue-400 shadow-sm bg-white' : 'border-gray-200 bg-gray-50/50 hover:border-blue-200 cursor-pointer'}`}>
+          <div className={`p-2 flex items-center gap-2 ${isModuleAActive ? 'bg-blue-50 border-b border-blue-100' : ''}`} onClick={() => !disabled && !isModuleAActive && handleSetMode('crop')}>
+             <div className={`w-3.5 h-3.5 rounded-full border-2 flex flex-shrink-0 items-center justify-center ${isModuleAActive ? 'border-blue-600 bg-blue-600' : 'border-gray-400'}`}>
+               {isModuleAActive && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
              </div>
-             <span className={`text-[11px] font-bold ${mode !== 'resize' ? 'text-blue-800' : 'text-gray-500'}`}>模块 A：画板排版</span>
+             <span className={`text-[11px] font-bold ${isModuleAActive ? 'text-blue-800' : 'text-gray-500'}`}>模块 A：画板排版</span>
           </div>
-          {mode !== 'resize' && (
+          {isModuleAActive && (
             <div className="p-2 space-y-3 animate-fade-in-down">
               <div className="flex bg-gray-100 p-0.5 rounded-md shrink-0">
                 <button disabled={disabled} onClick={() => handleSetMode("crop")} className={`flex-1 py-1 text-xs font-bold rounded transition-all disabled:opacity-40 disabled:cursor-not-allowed ${mode === 'crop' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>物理裁切</button>
@@ -607,14 +760,84 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
             </div>
           )}
         </div>
+
+        <div className={`border-2 rounded-xl overflow-hidden transition-all duration-300 ${mode === 'border' ? 'border-emerald-400 shadow-sm bg-white' : 'border-gray-200 bg-gray-50/50 hover:border-emerald-200 cursor-pointer'}`}>
+          <div className={`p-2 flex items-center gap-2 ${mode === 'border' ? 'bg-emerald-50 border-b border-emerald-100' : ''}`} onClick={() => !disabled && handleSetMode('border')}>
+             <div className={`w-3.5 h-3.5 rounded-full border-2 flex flex-shrink-0 items-center justify-center ${mode === 'border' ? 'border-emerald-600 bg-emerald-600' : 'border-gray-400'}`}>
+               {mode === 'border' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+             </div>
+             <span className={`text-[11px] font-bold ${mode === 'border' ? 'text-emerald-800' : 'text-gray-500'}`}>模块 C：加白边（批量）</span>
+          </div>
+          {mode === 'border' && (
+            <div className="p-3 animate-fade-in-down">
+              <div className="bg-emerald-50/60 p-2 rounded-md border border-emerald-100">
+                <div className="grid grid-cols-3 gap-2 items-center">
+                  <div></div>
+                  <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
+                    <span>上</span>
+                    <div className="flex items-center gap-1">
+                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderTopCm} onChange={e => handleBorderSideChange("top", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <span className="text-[10px] text-gray-500">cm</span>
+                    </div>
+                  </label>
+                  <div></div>
+
+                  <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
+                    <span>左</span>
+                    <div className="flex items-center gap-1">
+                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderLeftCm} onChange={e => handleBorderSideChange("left", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <span className="text-[10px] text-gray-500">cm</span>
+                    </div>
+                  </label>
+
+                  <div className="flex items-center justify-center">
+                    <button
+                      disabled={disabled}
+                      onClick={toggleBorderLink}
+                      className={`p-1.5 rounded border shadow-sm disabled:opacity-40 disabled:cursor-not-allowed ${borderLinked ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-white text-gray-400 border-emerald-200'}`}
+                      title={borderLinked ? '已联动（四边同步）' : '未联动（四边独立）'}
+                    >
+                      {borderLinked ? (
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M13.2 7.8l-1.4-1.4c-1.5-1.5-4-1.5-5.5 0l-2.8 2.8c-1.5 1.5-1.5 4 0 5.5l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.7-.7-.7-2 0-2.8l2.8-2.8c.8-.8 2-.8 2.8 0l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.4-.4-1-.4-1.4 0s-.4 1 0 1.4l1.4 1.4c1.5 1.5 4 1.5 5.5 0l2.8-2.8c1.5-1.5 1.5-4.1 0-5.6z"/></svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                      )}
+                    </button>
+                  </div>
+
+                  <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
+                    <span>右</span>
+                    <div className="flex items-center gap-1">
+                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderRightCm} onChange={e => handleBorderSideChange("right", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <span className="text-[10px] text-gray-500">cm</span>
+                    </div>
+                  </label>
+
+                  <div></div>
+                  <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
+                    <span>下</span>
+                    <div className="flex items-center gap-1">
+                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderBottomCm} onChange={e => handleBorderSideChange("bottom", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <span className="text-[10px] text-gray-500">cm</span>
+                    </div>
+                  </label>
+                  <div></div>
+                </div>
+              </div>
+              <div className="text-[10px] text-emerald-700 mt-2 text-center">
+                {borderLinked ? "联动中：修改任一方向会同步四边" : "独立模式：上/右/下/左分别设置"}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mt-2 pt-2 border-t border-gray-100 shrink-0 flex items-center justify-between gap-2">
         <button onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))} disabled={disabled || currentIndex === 0} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <button disabled={disabled} onClick={handleExecuteAll} className={`flex-1 h-10 text-white rounded-lg text-[13px] font-bold shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${mode === 'resize' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-[#0B1527] hover:bg-black'}`}>
-          {mode === 'resize' ? `执行当前图像 (${currentIndex + 1} / ${selectedImages.length})` : `裁切 (${selectedImages.length}张)`}
+        <button disabled={disabled} onClick={handleExecuteAll} className={`flex-1 h-10 text-white rounded-lg text-[13px] font-bold shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${mode === 'resize' ? 'bg-purple-600 hover:bg-purple-700' : mode === 'border' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#0B1527] hover:bg-black'}`}>
+          {mode === 'resize' ? `执行当前图像 (${currentIndex + 1} / ${selectedImages.length})` : mode === 'border' ? `加白边 (${selectedImages.length}张)` : `裁切 (${selectedImages.length}张)`}
         </button>
         <button onClick={() => setCurrentIndex(prev => Math.min(selectedImages.length - 1, prev + 1))} disabled={disabled || currentIndex === selectedImages.length - 1} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>

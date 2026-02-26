@@ -147,12 +147,16 @@ fn generate_thumbnail(path_str: String) -> Result<String, String> {
 async fn process_image(
     path_str: String, mode: String, target_w_cm: f32, target_h_cm: f32,
     crop_x: f32, crop_y: f32, crop_w: f32, crop_h: f32,
+    border_top_cm: f32,
+    border_right_cm: f32,
+    border_bottom_cm: f32,
+    border_left_cm: f32,
 ) -> Result<(String, String), String> { 
     let input_path = Path::new(&path_str);
     if !input_path.exists() { return Err("文件不存在".to_string()); }
 
     let target_layer = format!("{}[0]", path_str);
-    let output_dim = magick_command().args(["identify", "-format", "%w %h", &target_layer]).output().map_err(|e| format!("启动探测引擎失败: {}", e))?;
+    let output_dim = magick_command().args(["identify", "-format", "%w %h %x %U", &target_layer]).output().map_err(|e| format!("启动探测引擎失败: {}", e))?;
     if !output_dim.status.success() { return Err("无法解析尺寸".to_string()); }
 
     let dim_str = String::from_utf8_lossy(&output_dim.stdout);
@@ -161,6 +165,16 @@ async fn process_image(
     
     let orig_w: f64 = dims[0].parse().unwrap_or(1.0);
     let orig_h: f64 = dims[1].parse().unwrap_or(1.0);
+    let mut src_dpi: f64 = 300.0;
+    if dims.len() >= 3 {
+        let parsed_dpi: f64 = dims[2].parse().unwrap_or(0.0);
+        if parsed_dpi > 0.0 {
+            src_dpi = parsed_dpi;
+            if dims.len() >= 4 && dims[3].to_lowercase().contains("centimeter") {
+                src_dpi *= 2.54;
+            }
+        }
+    }
 
     let px = (crop_x as f64 / 100.0 * orig_w).round() as u32;
     let py = (crop_y as f64 / 100.0 * orig_h).round() as u32;
@@ -189,6 +203,29 @@ async fn process_image(
     } else if mode == "resize" {
         args.push("-resize".to_string()); args.push(format!("{}x{}!", target_w_px, target_h_px));
         args.push("-background".to_string()); args.push("white".to_string());
+        args.push("-flatten".to_string());
+    } else if mode == "border" {
+        let top_px = (((border_top_cm.max(0.0) as f64) / 2.54) * src_dpi).round() as u32;
+        let right_px = (((border_right_cm.max(0.0) as f64) / 2.54) * src_dpi).round() as u32;
+        let bottom_px = (((border_bottom_cm.max(0.0) as f64) / 2.54) * src_dpi).round() as u32;
+        let left_px = (((border_left_cm.max(0.0) as f64) / 2.54) * src_dpi).round() as u32;
+
+        let expanded_w = (orig_w.round() as u32)
+            .saturating_add(left_px)
+            .saturating_add(right_px)
+            .max(1);
+        let expanded_h = (orig_h.round() as u32)
+            .saturating_add(top_px)
+            .saturating_add(bottom_px)
+            .max(1);
+
+        args.push("-background".to_string()); args.push("white".to_string());
+        args.push("-gravity".to_string()); args.push("northwest".to_string());
+        args.push("-splice".to_string()); args.push(format!("{}x{}", left_px, top_px));
+        args.push("-gravity".to_string()); args.push("southeast".to_string());
+        args.push("-splice".to_string()); args.push(format!("{}x{}", right_px, bottom_px));
+        args.push("-gravity".to_string()); args.push("northwest".to_string());
+        args.push("-extent".to_string()); args.push(format!("{}x{}", expanded_w, expanded_h));
         args.push("-flatten".to_string());
     } else {
         // Pad mode (等比留白)
