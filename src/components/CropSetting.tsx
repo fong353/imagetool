@@ -14,6 +14,7 @@ export interface ProcessPayload {
 
 interface CropSettingProps {
   selectedImages: ImageItem[];
+  disabled?: boolean;
   onProcessAll: (payloads: ProcessPayload[]) => void;
 }
 
@@ -44,7 +45,7 @@ const parseSize = (sizeStr?: string): [number, number] => {
   return [20, 20];
 };
 
-export default function CropSetting({ selectedImages, onProcessAll }: CropSettingProps) {
+export default function CropSetting({ selectedImages, disabled, onProcessAll }: CropSettingProps) {
   const [ , setConfigs] = useState<Record<string, ImageConfig>>({});
   const configsRef = useRef<Record<string, ImageConfig>>({});
 
@@ -372,6 +373,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   };
 
   const handleSetMode = (m: string) => { 
+    if (disabled) return;
     setMode(m); 
     if (currentImage) updateConfig(currentImage.path, { mode: m }); 
   };
@@ -394,6 +396,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
   };
 
   const handleExecuteAll = () => {
+    if (disabled) return;
     try {
       if (mode === "resize") {
         const img = selectedImages[currentIndex];
@@ -509,7 +512,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
 
       <div className="flex-1 overflow-y-auto pr-1 space-y-3 custom-scrollbar">
         <div className={`border-2 rounded-xl overflow-hidden transition-all duration-300 ${mode !== 'resize' ? 'border-blue-400 shadow-sm bg-white' : 'border-gray-200 bg-gray-50/50 hover:border-blue-200 cursor-pointer'}`}>
-          <div className={`p-2 flex items-center gap-2 ${mode !== 'resize' ? 'bg-blue-50 border-b border-blue-100' : ''}`} onClick={() => mode === 'resize' && handleSetMode('crop')}>
+          <div className={`p-2 flex items-center gap-2 ${mode !== 'resize' ? 'bg-blue-50 border-b border-blue-100' : ''}`} onClick={() => !disabled && mode === 'resize' && handleSetMode('crop')}>
              <div className={`w-3.5 h-3.5 rounded-full border-2 flex flex-shrink-0 items-center justify-center ${mode !== 'resize' ? 'border-blue-600 bg-blue-600' : 'border-gray-400'}`}>
                {mode !== 'resize' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
              </div>
@@ -518,8 +521,8 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
           {mode !== 'resize' && (
             <div className="p-2 space-y-3 animate-fade-in-down">
               <div className="flex bg-gray-100 p-0.5 rounded-md shrink-0">
-                <button onClick={() => handleSetMode("crop")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'crop' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>物理裁切</button>
-                <button onClick={() => handleSetMode("pad")} className={`flex-1 py-1 text-xs font-bold rounded transition-all ${mode === 'pad' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>等比留白</button>
+                <button disabled={disabled} onClick={() => handleSetMode("crop")} className={`flex-1 py-1 text-xs font-bold rounded transition-all disabled:opacity-40 disabled:cursor-not-allowed ${mode === 'crop' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>物理裁切</button>
+                <button disabled={disabled} onClick={() => handleSetMode("pad")} className={`flex-1 py-1 text-xs font-bold rounded transition-all disabled:opacity-40 disabled:cursor-not-allowed ${mode === 'pad' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>等比留白</button>
               </div>
               <div>
                 
@@ -527,47 +530,47 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
                   <h3 className="text-[10px] font-bold text-gray-400">模版库与输出尺寸</h3>
                   <div className="flex gap-1">
                     {mode === 'crop' && (
-                      <button onClick={toggleCropOrientation} className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors ${isCropFlipped ? 'bg-orange-100 text-orange-600 hover:bg-orange-200 border border-orange-200' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'}`}>
+                      <button disabled={disabled} onClick={toggleCropOrientation} className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isCropFlipped ? 'bg-orange-100 text-orange-600 hover:bg-orange-200 border border-orange-200' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200'}`}>
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
                         {isCropFlipped ? '已翻转 (点击还原)' : '一键横竖互换'}
                       </button>
                     )}
-                    <button onClick={() => setIsAddingPreset(!isAddingPreset)} className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">+ 新增</button>
+                    <button disabled={disabled} onClick={() => setIsAddingPreset(!isAddingPreset)} className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed">+ 新增</button>
                   </div>
                 </div>
 
                 {isAddingPreset && (
                   <div className="mb-2 p-1.5 bg-gray-50 border border-gray-200 rounded-md flex flex-col gap-1.5">
-                    <input type="text" placeholder="备注 (如: 海报 5x10)" value={newPresetLabel} onChange={e => setNewPresetLabel(e.target.value)} className="w-full px-2 py-1 text-[11px] font-bold border border-gray-200 rounded outline-none" />
+                    <input disabled={disabled} type="text" placeholder="备注 (如: 海报 5x10)" value={newPresetLabel} onChange={e => setNewPresetLabel(e.target.value)} className="w-full px-2 py-1 text-[11px] font-bold border border-gray-200 rounded outline-none disabled:opacity-40 disabled:cursor-not-allowed" />
                     <div className="flex gap-1 items-center">
                       <span className="text-[10px] text-gray-500">宽:</span>
-                      <input type="number" value={newPresetW} onChange={e => setNewPresetW(Number(e.target.value) || '')} className="flex-1 w-0 px-1 py-1 text-[11px] text-center border border-gray-200 rounded outline-none" />
+                      <input disabled={disabled} type="number" value={newPresetW} onChange={e => setNewPresetW(Number(e.target.value) || '')} className="flex-1 w-0 px-1 py-1 text-[11px] text-center border border-gray-200 rounded outline-none disabled:opacity-40 disabled:cursor-not-allowed" />
                       <span className="text-[10px] text-gray-500">高:</span>
-                      <input type="number" value={newPresetH} onChange={e => setNewPresetH(Number(e.target.value) || '')} className="flex-1 w-0 px-1 py-1 text-[11px] text-center border border-gray-200 rounded outline-none" />
-                      <button onClick={handleSavePreset} className="px-2 py-1 bg-blue-500 text-white text-[10px] rounded hover:bg-blue-600">保存</button>
+                      <input disabled={disabled} type="number" value={newPresetH} onChange={e => setNewPresetH(Number(e.target.value) || '')} className="flex-1 w-0 px-1 py-1 text-[11px] text-center border border-gray-200 rounded outline-none disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <button disabled={disabled} onClick={handleSavePreset} className="px-2 py-1 bg-blue-500 text-white text-[10px] rounded hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed">保存</button>
                     </div>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-1.5">
                   {presets.map(preset => (
                     <div key={preset.label} className="relative group">
-                      <button onClick={() => handlePresetClick(preset.label)} className={`w-full py-1 text-[11px] font-bold border rounded-md transition-colors ${activePreset === preset.label ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>{preset.label}</button>
-                      <button onClick={(e) => handleDeletePreset(e, preset.label)} className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-100 text-red-500 rounded-full text-[8px] hidden group-hover:flex items-center justify-center hover:bg-red-500 hover:text-white z-10">×</button>
+                      <button disabled={disabled} onClick={() => handlePresetClick(preset.label)} className={`w-full py-1 text-[11px] font-bold border rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${activePreset === preset.label ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>{preset.label}</button>
+                      <button disabled={disabled} onClick={(e) => handleDeletePreset(e, preset.label)} className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-100 text-red-500 rounded-full text-[8px] hidden group-hover:flex items-center justify-center hover:bg-red-500 hover:text-white z-10 disabled:opacity-40 disabled:cursor-not-allowed">×</button>
                     </div>
                   ))}
-                  <button onClick={() => handlePresetClick("图像尺寸")} className={`col-span-2 py-1 text-[11px] font-bold border rounded-md transition-colors ${activePreset === "图像尺寸" ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>图像尺寸 (自由设定)</button>
+                  <button disabled={disabled} onClick={() => handlePresetClick("图像尺寸")} className={`col-span-2 py-1 text-[11px] font-bold border rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${activePreset === "图像尺寸" ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>图像尺寸 (自由设定)</button>
                 </div>
                 {activePreset === "图像尺寸" && (
                    <div className="flex gap-1 mt-1.5 items-center justify-center bg-gray-50 p-1.5 rounded-md border border-gray-100">
-                      <button onClick={toggleLink} className={`p-1 bg-white border border-gray-200 shadow-sm rounded ${isLinked ? 'text-blue-600' : 'text-gray-400'}`}>
+                      <button disabled={disabled} onClick={toggleLink} className={`p-1 bg-white border border-gray-200 shadow-sm rounded disabled:opacity-40 disabled:cursor-not-allowed ${isLinked ? 'text-blue-600' : 'text-gray-400'}`}>
                         {isLinked ? <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M13.2 7.8l-1.4-1.4c-1.5-1.5-4-1.5-5.5 0l-2.8 2.8c-1.5 1.5-1.5 4 0 5.5l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.7-.7-.7-2 0-2.8l2.8-2.8c.8-.8 2-.8 2.8 0l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.4-.4-1-.4-1.4 0s-.4 1 0 1.4l1.4 1.4c1.5 1.5 4 1.5 5.5 0l2.8-2.8c1.5-1.5 1.5-4.1 0-5.6z"/></svg> : <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>}
                       </button>
                       
                       <span className="text-[10px] text-gray-500">宽:</span>
-                      <input type="number" value={customW} onChange={e => handleCustomWChange(e.target.value)} className="w-12 px-1 py-1 text-[11px] font-bold text-center border rounded outline-none" />
+                      <input disabled={disabled} type="number" value={customW} onChange={e => handleCustomWChange(e.target.value)} className="w-12 px-1 py-1 text-[11px] font-bold text-center border rounded outline-none disabled:opacity-40 disabled:cursor-not-allowed" />
 
                       <span className="text-[10px] text-gray-500">高:</span>
-                      <input type="number" value={customH} onChange={e => handleCustomHChange(e.target.value)} className="w-12 px-1 py-1 text-[11px] font-bold text-center border rounded outline-none" />
+                      <input disabled={disabled} type="number" value={customH} onChange={e => handleCustomHChange(e.target.value)} className="w-12 px-1 py-1 text-[11px] font-bold text-center border rounded outline-none disabled:opacity-40 disabled:cursor-not-allowed" />
                    </div>
                 )}
               </div>
@@ -576,7 +579,7 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
         </div>
 
         <div className={`border-2 rounded-xl overflow-hidden transition-all duration-300 ${mode === 'resize' ? 'border-purple-400 shadow-sm bg-white' : 'border-gray-200 bg-gray-50/50 hover:border-purple-200 cursor-pointer'}`}>
-          <div className={`p-2 flex items-center gap-2 ${mode === 'resize' ? 'bg-purple-50 border-b border-purple-100' : ''}`} onClick={() => handleSetMode('resize')}>
+          <div className={`p-2 flex items-center gap-2 ${mode === 'resize' ? 'bg-purple-50 border-b border-purple-100' : ''}`} onClick={() => !disabled && handleSetMode('resize')}>
              <div className={`w-3.5 h-3.5 rounded-full border-2 flex flex-shrink-0 items-center justify-center ${mode === 'resize' ? 'border-purple-600 bg-purple-600' : 'border-gray-400'}`}>
                {mode === 'resize' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
              </div>
@@ -585,18 +588,18 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
           {mode === 'resize' && (
             <div className="p-3 animate-fade-in-down">
                <div className="flex gap-2 items-center justify-center bg-purple-50/50 p-2 rounded-md border border-purple-100">
-                  <button onClick={toggleResizeLink} className={`p-1.5 bg-white border border-purple-200 shadow-sm rounded ${resizeLinked ? 'text-purple-600' : 'text-gray-400'}`}>
+                  <button disabled={disabled} onClick={toggleResizeLink} className={`p-1.5 bg-white border border-purple-200 shadow-sm rounded disabled:opacity-40 disabled:cursor-not-allowed ${resizeLinked ? 'text-purple-600' : 'text-gray-400'}`}>
                     {resizeLinked ? <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M13.2 7.8l-1.4-1.4c-1.5-1.5-4-1.5-5.5 0l-2.8 2.8c-1.5 1.5-1.5 4 0 5.5l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.7-.7-.7-2 0-2.8l2.8-2.8c.8-.8 2-.8 2.8 0l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.4-.4-1-.4-1.4 0s-.4 1 0 1.4l1.4 1.4c1.5 1.5 4 1.5 5.5 0l2.8-2.8c1.5-1.5 1.5-4.1 0-5.6z"/></svg> : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>}
                   </button>
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-1">
                       <span className="text-[11px] font-bold text-gray-600 w-4">宽:</span>
-                      <input type="number" value={resizeW} onChange={e => handleResizeWChange(e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-purple-200 outline-none focus:border-purple-500" />
+                      <input disabled={disabled} type="number" value={resizeW} onChange={e => handleResizeWChange(e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-purple-200 outline-none focus:border-purple-500 disabled:opacity-40 disabled:cursor-not-allowed" />
                       <span className="text-[10px] text-gray-500">cm</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <span className="text-[11px] font-bold text-gray-600 w-4">高:</span>
-                      <input type="number" value={resizeH} onChange={e => handleResizeHChange(e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-purple-200 outline-none focus:border-purple-500" />
+                      <input disabled={disabled} type="number" value={resizeH} onChange={e => handleResizeHChange(e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-purple-200 outline-none focus:border-purple-500 disabled:opacity-40 disabled:cursor-not-allowed" />
                       <span className="text-[10px] text-gray-500">cm</span>
                     </div>
                   </div>
@@ -607,13 +610,13 @@ export default function CropSetting({ selectedImages, onProcessAll }: CropSettin
       </div>
 
       <div className="mt-2 pt-2 border-t border-gray-100 shrink-0 flex items-center justify-between gap-2">
-        <button onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))} disabled={currentIndex === 0} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
+        <button onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))} disabled={disabled || currentIndex === 0} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <button onClick={handleExecuteAll} className={`flex-1 h-10 text-white rounded-lg text-[13px] font-bold shadow-md active:scale-95 transition-all ${mode === 'resize' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-[#0B1527] hover:bg-black'}`}>
+        <button disabled={disabled} onClick={handleExecuteAll} className={`flex-1 h-10 text-white rounded-lg text-[13px] font-bold shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${mode === 'resize' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-[#0B1527] hover:bg-black'}`}>
           {mode === 'resize' ? `执行当前图像 (${currentIndex + 1} / ${selectedImages.length})` : `裁切 (${selectedImages.length}张)`}
         </button>
-        <button onClick={() => setCurrentIndex(prev => Math.min(selectedImages.length - 1, prev + 1))} disabled={currentIndex === selectedImages.length - 1} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
+        <button onClick={() => setCurrentIndex(prev => Math.min(selectedImages.length - 1, prev + 1))} disabled={disabled || currentIndex === selectedImages.length - 1} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
         </button>
       </div>

@@ -1,11 +1,12 @@
 interface ReplicateSettingProps {
   selectedCount: number;
+  disabled?: boolean;
   onExecute: () => void;
   onSyncToCost: () => void;
   replicateLocked: boolean;
 }
 
-export default function ReplicateSetting({ selectedCount, onExecute, onSyncToCost, replicateLocked }: ReplicateSettingProps) {
+export default function ReplicateSetting({ selectedCount, disabled, onExecute, onSyncToCost, replicateLocked }: ReplicateSettingProps) {
   return (
     <div className="flex flex-col h-full bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center items-center justify-center">
       <div className="w-16 h-16 bg-purple-50 text-purple-500 rounded-2xl flex items-center justify-center mb-4 shadow-inner">
@@ -17,10 +18,10 @@ export default function ReplicateSetting({ selectedCount, onExecute, onSyncToCos
         复制将对全部可用文件生效（无需勾选）。
       </p>
       <div className="w-full flex flex-col gap-3">
-        <button onClick={onSyncToCost} className="py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+        <button disabled={disabled} onClick={onSyncToCost} className="py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
           <span>核算</span>
         </button>
-        <button onClick={onExecute} disabled={selectedCount === 0 || replicateLocked} className="py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-200 text-white rounded-2xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+        <button onClick={onExecute} disabled={selectedCount === 0 || replicateLocked || disabled} className="py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-200 text-white rounded-2xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
           <span>复制多份到本地</span>
           {selectedCount > 0 && <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px]">{selectedCount}项</span>}
         </button>

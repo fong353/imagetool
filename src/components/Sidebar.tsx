@@ -10,6 +10,7 @@ interface SidebarProps {
   activeCraft: string;
   setActiveCraft: (craft: string) => void;
   selectedImages: ImageItem[];
+  disabled?: boolean;
   onExecuteRename: () => void;
 }
 
@@ -21,6 +22,7 @@ export default function Sidebar({
   activeCraft,
   setActiveCraft,
   selectedImages,
+  disabled,
   onExecuteRename
 }: SidebarProps) {
   return (
@@ -33,6 +35,7 @@ export default function Sidebar({
         // 🌟 新增：继续透传给 PaperSetting 面板
         activeCraft={activeCraft}
         setActiveCraft={setActiveCraft}
+        disabled={disabled}
         selectedCount={selectedImages.length} 
         onExecute={onExecuteRename} 
       />

@@ -3,6 +3,7 @@ import { ImageItem } from "../types";
 
 interface ListImageViewProps {
   images: ImageItem[];
+  disabled?: boolean;
   onToggleSelect: (index: number) => void;
   onSelectAll?: () => void;
   onDeselectAll?: () => void;
@@ -13,7 +14,7 @@ interface ListImageViewProps {
 }
 
 export default function ListImageView({
-  images, onToggleSelect, onSelectAll, onDeselectAll, onClearAll, costQuantities, onUpdateCostQuantity, onRemoveOne
+  images, disabled, onToggleSelect, onSelectAll, onDeselectAll, onClearAll, costQuantities, onUpdateCostQuantity, onRemoveOne
 }: ListImageViewProps) {
   const [listZoom, setListZoom] = useState(100);
 
@@ -49,20 +50,21 @@ export default function ListImageView({
             <div className="flex items-center gap-2 bg-gray-200/50 px-3 py-1.5 rounded-full border border-gray-200/80 shadow-inner">
               <span className="text-xs text-gray-400 opacity-80">🔍</span>
               <input
+                disabled={disabled}
                 type="range"
                 min="80"
                 max="250"
                 step="1"
                 value={listZoom}
                 onChange={(e) => setListZoom(Number(e.target.value))}
-                className="w-20 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-600 transition-all"
+                className="w-20 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               />
               <span className="text-[11px] text-gray-500 w-9 text-right">{listZoom}%</span>
             </div>
-            <button onClick={onSelectAll} className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors">全选</button>
-            <button onClick={onDeselectAll} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors">取消</button>
+            <button disabled={disabled} onClick={onSelectAll} className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">全选</button>
+            <button disabled={disabled} onClick={onDeselectAll} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">取消</button>
             <div className="w-px h-5 bg-gray-200"></div>
-            <button onClick={onClearAll} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors">一键清空</button>
+            <button disabled={disabled} onClick={onClearAll} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">一键清空</button>
           </div>
         )}
       </div>
@@ -93,7 +95,7 @@ export default function ListImageView({
                 return (
                   <div
                     key={img.path}
-                    onClick={() => onToggleSelect(index)}
+                    onClick={() => { if (!disabled) onToggleSelect(index); }}
                     className={`grid px-6 items-center transition-all cursor-pointer ${
                       img.selected
                         ? "bg-blue-50 border-l-4 border-l-blue-500"
@@ -116,6 +118,7 @@ export default function ListImageView({
                     </div>
                     
                     <input
+                      disabled={disabled}
                       type="number"
                       min="1"
                       value={costQuantities?.[img.path] || 1}
@@ -125,7 +128,7 @@ export default function ListImageView({
                         onUpdateCostQuantity?.(img.path, qty);
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      className="w-full px-2 py-1 text-xs font-bold text-center border border-orange-300 rounded-md focus:outline-none focus:border-orange-500 focus:bg-orange-50"
+                      className="w-full px-2 py-1 text-xs font-bold text-center border border-orange-300 rounded-md focus:outline-none focus:border-orange-500 focus:bg-orange-50 disabled:opacity-40 disabled:cursor-not-allowed"
                     />
                     
                     <div className={`text-xs text-center font-mono ${img.isSupported ? "text-blue-600" : "text-red-500 font-bold"}`}>
@@ -136,7 +139,7 @@ export default function ListImageView({
                     
                     <div className="flex items-center justify-center">
                       {img.isSupported && (
-                        <button onClick={(e) => { e.stopPropagation(); onRemoveOne?.(img.path); }} className="text-xs text-red-600 bg-white px-1.5 py-0.5 rounded-md border border-red-100 hover:bg-red-50">移除</button>
+                        <button disabled={disabled} onClick={(e) => { e.stopPropagation(); onRemoveOne?.(img.path); }} className="text-xs text-red-600 bg-white px-1.5 py-0.5 rounded-md border border-red-100 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">移除</button>
                       )}
                     </div>
                   </div>

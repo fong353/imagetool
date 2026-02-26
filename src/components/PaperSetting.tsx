@@ -16,12 +16,13 @@ interface PaperSettingProps {
   setCustomPaper: (paper: string) => void; 
   activeCraft: string;
   setActiveCraft: (craft: string) => void;
+  disabled?: boolean;
   selectedCount: number;
   onExecute: () => void;
 }
 
 export default function PaperSetting({
-  activePaper, setActivePaper, customPaper, setCustomPaper, activeCraft, setActiveCraft, selectedCount, onExecute
+  activePaper, setActivePaper, customPaper, setCustomPaper, activeCraft, setActiveCraft, disabled, selectedCount, onExecute
 }: PaperSettingProps) {
 
   const [papers, setPapers] = useState<string[]>(() => {
@@ -134,13 +135,13 @@ export default function PaperSetting({
         {/* 老板模式：导入/导出 控制台 */}
         {isEditMode && (
           <div className="flex gap-2 mb-4 p-2 bg-gray-100 rounded-lg border border-gray-200 shadow-inner">
-             <button onClick={handleExportConfig} className="flex-1 bg-white border border-gray-300 text-gray-700 px-2 py-1.5 rounded text-xs font-bold hover:bg-gray-50 shadow-sm transition-all">
+             <button disabled={disabled} onClick={handleExportConfig} className="flex-1 bg-white border border-gray-300 text-gray-700 px-2 py-1.5 rounded text-xs font-bold hover:bg-gray-50 shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                ⬇️ 导出配置 (.json)
              </button>
-             <button onClick={() => fileInputRef.current?.click()} className="flex-1 bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-blue-700 shadow-sm transition-all">
+             <button disabled={disabled} onClick={() => fileInputRef.current?.click()} className="flex-1 bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-blue-700 shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                ⬆️ 导入配置
              </button>
-             <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportConfig} className="hidden" />
+             <input disabled={disabled} type="file" accept=".json" ref={fileInputRef} onChange={handleImportConfig} className="hidden" />
           </div>
         )}
 
@@ -149,9 +150,10 @@ export default function PaperSetting({
           {papers.map((cat) => (
             <div key={cat} className="relative group">
               <button 
+                disabled={disabled}
                 // 🌟 点击按钮时，自动清空手动输入框的值
                 onClick={() => { setActivePaper(cat); setCustomPaper(""); }} 
-                className={`w-full flex items-center justify-center py-2 px-1 rounded-lg border-2 transition-all text-[13px] font-medium active:scale-95 ${ 
+                className={`w-full flex items-center justify-center py-2 px-1 rounded-lg border-2 transition-all text-[13px] font-medium active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${ 
                   activePaper === cat && customPaper.trim() === ""
                   ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm" 
                   : "border-gray-100 bg-gray-50 text-gray-600 hover:border-blue-300 hover:bg-white" 
@@ -160,7 +162,7 @@ export default function PaperSetting({
                 {cat}
               </button>
               {isEditMode && (
-                <button onClick={(e) => handleDeletePaper(e, cat)} className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-100 text-red-500 rounded-full text-[10px] flex items-center justify-center border border-red-200 hover:bg-red-500 hover:text-white z-10 transition-colors">×</button>
+                <button disabled={disabled} onClick={(e) => handleDeletePaper(e, cat)} className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-100 text-red-500 rounded-full text-[10px] flex items-center justify-center border border-red-200 hover:bg-red-500 hover:text-white z-10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">×</button>
               )}
             </div>
           ))}
@@ -169,8 +171,8 @@ export default function PaperSetting({
         {/* 老板模式：新增纸张 */}
         {isEditMode && (
           <div className="flex gap-2 mb-2 p-2 bg-blue-50/50 rounded-lg border border-blue-100">
-            <input type="text" value={newPaper} onChange={e => setNewPaper(e.target.value)} placeholder="新增材质..." className="flex-1 text-xs px-2 py-1.5 border border-gray-200 rounded outline-none focus:border-blue-400" />
-            <button onClick={handleAddPaper} className="bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-600">添加</button>
+            <input disabled={disabled} type="text" value={newPaper} onChange={e => setNewPaper(e.target.value)} placeholder="新增材质..." className="flex-1 text-xs px-2 py-1.5 border border-gray-200 rounded outline-none focus:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed" />
+            <button disabled={disabled} onClick={handleAddPaper} className="bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed">添加</button>
           </div>
         )}
 
@@ -178,9 +180,10 @@ export default function PaperSetting({
         <div className="mt-1 border-t border-gray-100 pt-3">
           <h3 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wider">或手动输入特殊材质 (优先)</h3>
           <input 
+            disabled={disabled}
             type="text" placeholder="例如：客户自带特种纸" value={customPaper}
             onChange={(e) => setCustomPaper(e.target.value)}
-            className={`w-full bg-gray-50 border-2 rounded-xl py-2 px-3 text-sm focus:bg-white outline-none transition-all ${
+            className={`w-full bg-gray-50 border-2 rounded-xl py-2 px-3 text-sm focus:bg-white outline-none transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
               customPaper.trim() !== "" ? "border-blue-500 ring-2 ring-blue-100 bg-white shadow-sm" : "border-gray-200 focus:border-blue-400"
             }`}
           />
@@ -193,8 +196,9 @@ export default function PaperSetting({
             {crafts.map((craft) => (
               <div key={craft} className="relative group">
                 <button 
+                  disabled={disabled}
                   onClick={() => setActiveCraft(craft)} 
-                  className={`w-full flex items-center justify-center py-2 px-1 rounded-lg border-2 transition-all text-[13px] font-medium active:scale-95 ${ 
+                  className={`w-full flex items-center justify-center py-2 px-1 rounded-lg border-2 transition-all text-[13px] font-medium active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${ 
                     activeCraft === craft
                     ? "border-green-500 bg-green-50 text-green-700 shadow-sm" 
                     : "border-gray-100 bg-gray-50 text-gray-600 hover:border-green-300 hover:bg-white" 
@@ -203,7 +207,7 @@ export default function PaperSetting({
                   {craft}
                 </button>
                 {isEditMode && (
-                  <button onClick={(e) => handleDeleteCraft(e, craft)} className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-100 text-red-500 rounded-full text-[10px] flex items-center justify-center border border-red-200 hover:bg-red-500 hover:text-white z-10 transition-colors">×</button>
+                  <button disabled={disabled} onClick={(e) => handleDeleteCraft(e, craft)} className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-100 text-red-500 rounded-full text-[10px] flex items-center justify-center border border-red-200 hover:bg-red-500 hover:text-white z-10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">×</button>
                 )}
               </div>
             ))}
@@ -213,15 +217,15 @@ export default function PaperSetting({
         {/* 老板模式：新增工艺 */}
         {isEditMode && (
           <div className="flex gap-2 mt-2 p-2 bg-green-50/50 rounded-lg border border-green-100">
-            <input type="text" value={newCraft} onChange={e => setNewCraft(e.target.value)} placeholder="新增工艺..." className="flex-1 text-xs px-2 py-1.5 border border-gray-200 rounded outline-none focus:border-green-400" />
-            <button onClick={handleAddCraft} className="bg-green-500 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-green-600">添加</button>
+            <input disabled={disabled} type="text" value={newCraft} onChange={e => setNewCraft(e.target.value)} placeholder="新增工艺..." className="flex-1 text-xs px-2 py-1.5 border border-gray-200 rounded outline-none focus:border-green-400 disabled:opacity-40 disabled:cursor-not-allowed" />
+            <button disabled={disabled} onClick={handleAddCraft} className="bg-green-500 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed">添加</button>
           </div>
         )}
 
       </div>
 
       <button 
-        onClick={onExecute} disabled={selectedCount === 0} 
+        onClick={onExecute} disabled={selectedCount === 0 || disabled} 
         className="w-full mt-4 py-3.5 bg-gray-900 hover:bg-black disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white rounded-2xl font-semibold transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 shrink-0"
       >
         <span>执行改名</span>
