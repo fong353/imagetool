@@ -64,10 +64,12 @@ jobs:
         shell: pwsh
         run: |
           $config = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $config.productName = "imagetool v1.5"
           if ($null -eq $config.bundle) {
             $config | Add-Member -MemberType NoteProperty -Name bundle -Value @{}
           }
           $config.bundle.externalBin = @()
+          $config.bundle.targets = @("nsis")
           $config | ConvertTo-Json -Depth 100 | Set-Content "src-tauri/tauri.win.no-magick.conf.json" -Encoding utf8
 
       - name: Build Tauri (Windows without bundled magick)
