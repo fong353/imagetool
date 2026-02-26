@@ -10,6 +10,14 @@ import CropSetting, { ProcessPayload } from "./components/CropSetting";
 import ReplicateSetting from "./components/ReplicateSetting";
 
 export default function App() {
+  const withPreviewCacheBuster = (url: string) => {
+    if (!url) return url;
+    const isLocalAsset = url.startsWith("asset://") || url.startsWith("http://asset.localhost/");
+    if (!isLocalAsset) return url;
+    const joiner = url.includes("?") ? "&" : "?";
+    return `${url}${joiner}t=${Date.now()}`;
+  };
+
   const [images, setImages] = useState<ImageItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   
@@ -61,7 +69,7 @@ export default function App() {
                 invoke<string>("generate_thumbnail", { pathStr: img.path }),
                 invoke<any>("get_image_meta", { pathStr: img.path })
               ]);
-              const finalUrl = thumbUrl.startsWith("asset://") ? `${thumbUrl}?t=${Date.now()}` : thumbUrl;
+              const finalUrl = withPreviewCacheBuster(thumbUrl);
               setImages(prev => prev.map(p => p.path === img.path ? { ...p, size: sizeStr, url: finalUrl, dpi: meta?.dpi } : p));
             } catch (error) {
               setImages(prev => prev.map(p => p.path === img.path ? { ...p, size: "尺寸未知" } : p));
@@ -149,7 +157,7 @@ export default function App() {
 
              try {
                 newThumb = await invoke<string>("generate_thumbnail", { pathStr: match.newPath });
-                if (newThumb.startsWith("asset://")) newThumb = `${newThumb}?t=${Date.now()}`;
+               newThumb = withPreviewCacheBuster(newThumb);
              } catch (e) { console.error("获取预览图失败", e); }
 
              return { ...img, path: match.newPath, name: match.newName, size: newSize, url: newThumb };
@@ -219,7 +227,7 @@ export default function App() {
           try {
              const newSize = await invoke<string>("get_image_size", { pathStr: newPath });
              let newThumb = await invoke<string>("generate_thumbnail", { pathStr: newPath });
-             if (newThumb.startsWith("asset://")) newThumb = `${newThumb}?t=${Date.now()}`;
+             newThumb = withPreviewCacheBuster(newThumb);
              return { ...img, path: newPath, name: newName, url: newThumb, size: newSize, selected: false };
           } catch (e) { return { ...img, path: newPath, name: newName, selected: false }; }
         }
@@ -309,7 +317,7 @@ export default function App() {
               invoke<string>("generate_thumbnail", { pathStr: img.path }),
               invoke<any>("get_image_meta", { pathStr: img.path })
             ]);
-            const url = thumb.startsWith("asset://") ? `${thumb}?t=${Date.now()}` : thumb;
+            const url = withPreviewCacheBuster(thumb);
             setImages(prev => prev.map(p => p.path === img.path ? { ...p, size, url, dpi: meta?.dpi } : p));
           } catch(e){}
         });
