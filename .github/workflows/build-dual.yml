@@ -54,12 +54,37 @@ jobs:
           }
           $cabPath = Join-Path $pwd "webview2-fixed-runtime.cab"
           $targetDir = Join-Path $pwd "src-tauri/webview2-fixed-runtime"
+          $extractDir = Join-Path $pwd "src-tauri/webview2-fixed-runtime-extract"
           if (Test-Path $targetDir) {
             Remove-Item -Path $targetDir -Recurse -Force
           }
+          if (Test-Path $extractDir) {
+            Remove-Item -Path $extractDir -Recurse -Force
+          }
           New-Item -ItemType Directory -Path $targetDir | Out-Null
+          New-Item -ItemType Directory -Path $extractDir | Out-Null
           Invoke-WebRequest -Uri $downloadUrl -OutFile $cabPath
-          expand $cabPath -F:* $targetDir | Out-Null
+          expand $cabPath -F:* $extractDir | Out-Null
+
+          $runtimeRoot = Get-ChildItem -Path $extractDir -Directory |
+            Where-Object { $_.Name -like "Microsoft.WebView2.FixedVersionRuntime.*.x64" } |
+            Select-Object -First 1
+
+          if ($null -ne $runtimeRoot) {
+            Get-ChildItem -Path $runtimeRoot.FullName -Force | ForEach-Object {
+              Move-Item -Path $_.FullName -Destination $targetDir -Force
+            }
+          } else {
+            Get-ChildItem -Path $extractDir -Force | ForEach-Object {
+              Move-Item -Path $_.FullName -Destination $targetDir -Force
+            }
+          }
+
+          if (-not (Test-Path (Join-Path $targetDir "msedgewebview2.exe"))) {
+            throw "Fixed WebView2 runtime is invalid: msedgewebview2.exe was not found in src-tauri/webview2-fixed-runtime"
+          }
+
+          Remove-Item -Path $extractDir -Recurse -Force
           Remove-Item $cabPath -Force
 
       - name: Build Tauri (Windows config override)
