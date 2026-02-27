@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { ImageItem, ProcessProgress } from "./types";
 import Sidebar from "./components/Sidebar";
 import ImageGrid, { DEFAULT_ZOOM } from "./components/ImageGrid";
@@ -10,6 +12,17 @@ import CropSetting, { ProcessPayload } from "./components/CropSetting";
 import ReplicateSetting from "./components/ReplicateSetting";
 
 export default function App() {
+  useEffect(() => {
+    getVersion()
+      .then((version) => {
+        const displayVersion = version.startsWith("v") ? version : `v${version}`;
+        const title = `墨印众合图像工具（${displayVersion}）`;
+        document.title = title;
+        getCurrentWindow().setTitle(title).catch(() => {});
+      })
+      .catch(() => {});
+  }, []);
+
   const withPreviewCacheBuster = (url: string) => {
     if (!url) return url;
     const isLocalAsset = url.startsWith("asset://") || url.startsWith("http://asset.localhost/");

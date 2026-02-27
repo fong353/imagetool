@@ -1,6 +1,7 @@
 use std::path::Path;
 use base64::{engine::general_purpose, Engine as _};
 use serde::Serialize;
+use tauri::Manager;
 
 // ==========================================
 // 🌟 辅助引擎：跨平台 Magick 唤醒器
@@ -359,6 +360,14 @@ async fn replicate_image(path_str: String, total_copies: u32) -> Result<Vec<Stri
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let version = app.package_info().version.to_string();
+            let title = format!("墨印众合图像工具（v{}）", version);
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_title(&title);
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             rename_files, get_image_size, get_image_meta, generate_thumbnail, process_image, replicate_image 
         ])

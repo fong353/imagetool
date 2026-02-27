@@ -82,6 +82,8 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
   const [resizeW, setResizeW] = useState<number | ''>(20);
   const [resizeH, setResizeH] = useState<number | ''>(20);
   const [resizeLinked, setResizeLinked] = useState<boolean>(true);
+  const [resizeEditedField, setResizeEditedField] = useState<"w" | "h" | null>(null);
+  const [resizeInputDirty, setResizeInputDirty] = useState<boolean>(false);
   const [borderLinked, setBorderLinked] = useState<boolean>(true);
   const [borderTopCm, setBorderTopCm] = useState<number | ''>(0.2);
   const [borderRightCm, setBorderRightCm] = useState<number | ''>(0.2);
@@ -103,6 +105,22 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
     }
     if (currentIndex >= selectedImages.length) setCurrentIndex(Math.max(0, selectedImages.length - 1));
   }, [selectedImages.length, currentIndex]);
+
+  useEffect(() => {
+    if (selectedImages.length > 1) {
+      setResizeEditedField("w");
+      setResizeInputDirty(false);
+    } else {
+      setResizeEditedField(null);
+      setResizeInputDirty(false);
+    }
+  }, [selectedImages.length]);
+
+  const handleSetResizeBatchBasis = (basis: "w" | "h") => {
+    if (selectedImages.length <= 1) return;
+    setResizeEditedField(basis);
+    setResizeInputDirty(false);
+  };
 
   const currentImage = selectedImages.length > 0 ? selectedImages[currentIndex] : undefined;
 
@@ -181,13 +199,16 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
        const conf = configsRef.current[currentImage.path];
        const [origW, origH] = parseSize(currentImage.size);
        const sourceConf = conf || getFallbackConfig(origW, origH);
+       const isBatchResizeMode = selectedImages.length > 1 && mode === "resize";
        
        setActivePreset(sourceConf.preset);
        setCustomW(sourceConf.customW); setCustomH(sourceConf.customH);
        setIsLinked(sourceConf.isLinked); setLinkedAspect(sourceConf.linkedAspect);
        setMode(sourceConf.mode);
        setIsCropFlipped(sourceConf.isCropFlipped || false);
-       setResizeW(sourceConf.resizeW); setResizeH(sourceConf.resizeH); setResizeLinked(sourceConf.resizeLinked);
+       if (!isBatchResizeMode) {
+         setResizeW(sourceConf.resizeW); setResizeH(sourceConf.resizeH); setResizeLinked(sourceConf.resizeLinked);
+       }
       setBorderLinked(sourceConf.borderLinked ?? true);
        setBorderTopCm(sourceConf.borderTopCm ?? 0.2);
        setBorderRightCm(sourceConf.borderRightCm ?? 0.2);
@@ -258,9 +279,12 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
     const [origW, origH] = parseSize(currentImage.size);
 
     if (conf) {
+      const isBatchResizeMode = selectedImages.length > 1 && mode === "resize";
       setActivePreset(conf.preset); setCustomW(conf.customW); setCustomH(conf.customH);
       setIsLinked(conf.isLinked); setLinkedAspect(conf.linkedAspect);
-      setResizeW(conf.resizeW); setResizeH(conf.resizeH); setResizeLinked(conf.resizeLinked);
+      if (!isBatchResizeMode) {
+        setResizeW(conf.resizeW); setResizeH(conf.resizeH); setResizeLinked(conf.resizeLinked);
+      }
       setBorderLinked(conf.borderLinked ?? true);
       setBorderTopCm(conf.borderTopCm ?? 0.2);
       setBorderRightCm(conf.borderRightCm ?? 0.2);
@@ -371,6 +395,25 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
 
   const handleResizeWChange = (val: string) => {
     const num: number | '' = val === '' ? '' : Number(val);
+
+    if (selectedImages.length > 1) {
+      if (resizeEditedField === "h") return;
+      setResizeW(num);
+      if (num === '') {
+        setResizeInputDirty(false);
+        setResizeH('');
+        return;
+      }
+      setResizeEditedField("w");
+      setResizeInputDirty(true);
+      if (currentImage) {
+        const [origW, origH] = parseSize(currentImage.size);
+        const ratio = origW / origH;
+        setResizeH(Number((Number(num) / ratio).toFixed(2)));
+      }
+      return;
+    }
+
     let newW: number | '' = num;
     let newH: number | '' = resizeH;
     if (resizeLinked && num !== '' && currentImage) {
@@ -383,6 +426,25 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
 
   const handleResizeHChange = (val: string) => {
     const num: number | '' = val === '' ? '' : Number(val);
+
+    if (selectedImages.length > 1) {
+      if (resizeEditedField === "w") return;
+      setResizeH(num);
+      if (num === '') {
+        setResizeInputDirty(false);
+        setResizeW('');
+        return;
+      }
+      setResizeEditedField("h");
+      setResizeInputDirty(true);
+      if (currentImage) {
+        const [origW, origH] = parseSize(currentImage.size);
+        const ratio = origW / origH;
+        setResizeW(Number((Number(num) * ratio).toFixed(2)));
+      }
+      return;
+    }
+
     let newW: number | '' = resizeW;
     let newH: number | '' = num;
     if (resizeLinked && num !== '' && currentImage) {
@@ -394,6 +456,8 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
   };
 
   const toggleResizeLink = () => {
+    if (selectedImages.length > 1) return;
+
     const newLinked = !resizeLinked;
     setResizeLinked(newLinked);
     if (newLinked && resizeW !== '' && currentImage) {
@@ -501,6 +565,48 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
     if (disabled) return;
     try {
       if (mode === "resize") {
+        if (selectedImages.length > 1) {
+          const clearBatchResizeParams = () => {
+            setResizeW('');
+            setResizeH('');
+            setResizeInputDirty(false);
+          };
+
+          if (!resizeInputDirty || !resizeEditedField) {
+            clearBatchResizeParams();
+            return;
+          }
+
+          const baseW = Number(resizeW);
+          const baseH = Number(resizeH);
+          if (resizeEditedField === "w" && (!Number.isFinite(baseW) || baseW <= 0)) {
+            clearBatchResizeParams();
+            return;
+          }
+          if (resizeEditedField === "h" && (!Number.isFinite(baseH) || baseH <= 0)) {
+            clearBatchResizeParams();
+            return;
+          }
+
+          const payloads: ProcessPayload[] = selectedImages.map((img) => {
+            const [origW, origH] = parseSize(img.size);
+            const ratio = origW / origH;
+            const targetW = resizeEditedField === "w" ? baseW : Number((baseH * ratio).toFixed(2));
+            const targetH = resizeEditedField === "h" ? baseH : Number((baseW / ratio).toFixed(2));
+            return {
+              image: img,
+              mode: "resize",
+              targetW,
+              targetH,
+              cropData: { x: 0, y: 0, w: 100, h: 100 }
+            };
+          });
+
+          onProcessAll(payloads);
+          clearBatchResizeParams();
+          return;
+        }
+
         const img = selectedImages[currentIndex];
         if (!img) return;
         const conf = configsRef.current[img.path];
@@ -740,23 +846,46 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
           </div>
           {mode === 'resize' && (
             <div className="p-3 animate-fade-in-down">
+               {selectedImages.length > 1 && (
+                <div className="mb-2 flex items-center justify-center gap-2">
+                  <button
+                    disabled={disabled}
+                    onClick={() => handleSetResizeBatchBasis("w")}
+                    className={`px-2 py-1 text-[10px] rounded border font-bold disabled:opacity-40 disabled:cursor-not-allowed ${resizeEditedField === "w" ? "bg-purple-600 text-white border-purple-600" : "bg-white text-purple-600 border-purple-300"}`}
+                  >
+                    按宽批量
+                  </button>
+                  <button
+                    disabled={disabled}
+                    onClick={() => handleSetResizeBatchBasis("h")}
+                    className={`px-2 py-1 text-[10px] rounded border font-bold disabled:opacity-40 disabled:cursor-not-allowed ${resizeEditedField === "h" ? "bg-purple-600 text-white border-purple-600" : "bg-white text-purple-600 border-purple-300"}`}
+                  >
+                    按高批量
+                  </button>
+                </div>
+               )}
                <div className="flex gap-2 items-center justify-center bg-purple-50/50 p-2 rounded-md border border-purple-100">
-                  <button disabled={disabled} onClick={toggleResizeLink} className={`p-1.5 bg-white border border-purple-200 shadow-sm rounded disabled:opacity-40 disabled:cursor-not-allowed ${resizeLinked ? 'text-purple-600' : 'text-gray-400'}`}>
+                    <button disabled={disabled || selectedImages.length > 1} onClick={toggleResizeLink} className={`p-1.5 bg-white border border-purple-200 shadow-sm rounded disabled:opacity-40 disabled:cursor-not-allowed ${resizeLinked || selectedImages.length > 1 ? 'text-purple-600' : 'text-gray-400'}`}>
                     {resizeLinked ? <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M13.2 7.8l-1.4-1.4c-1.5-1.5-4-1.5-5.5 0l-2.8 2.8c-1.5 1.5-1.5 4 0 5.5l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.7-.7-.7-2 0-2.8l2.8-2.8c.8-.8 2-.8 2.8 0l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.4-.4-1-.4-1.4 0s-.4 1 0 1.4l1.4 1.4c1.5 1.5 4 1.5 5.5 0l2.8-2.8c1.5-1.5 1.5-4.1 0-5.6z"/></svg> : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>}
                   </button>
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-1">
                       <span className="text-[11px] font-bold text-gray-600 w-4">宽:</span>
-                      <input disabled={disabled} type="number" value={resizeW} onChange={e => handleResizeWChange(e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-purple-200 outline-none focus:border-purple-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                        <input disabled={disabled || (selectedImages.length > 1 && resizeEditedField !== "w")} type="number" value={resizeW} onChange={e => handleResizeWChange(e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-purple-200 outline-none focus:border-purple-500 disabled:opacity-40 disabled:cursor-not-allowed" />
                       <span className="text-[10px] text-gray-500">cm</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <span className="text-[11px] font-bold text-gray-600 w-4">高:</span>
-                      <input disabled={disabled} type="number" value={resizeH} onChange={e => handleResizeHChange(e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-purple-200 outline-none focus:border-purple-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                        <input disabled={disabled || (selectedImages.length > 1 && resizeEditedField !== "h")} type="number" value={resizeH} onChange={e => handleResizeHChange(e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-purple-200 outline-none focus:border-purple-500 disabled:opacity-40 disabled:cursor-not-allowed" />
                       <span className="text-[10px] text-gray-500">cm</span>
                     </div>
                   </div>
                </div>
+                 {selectedImages.length > 1 && (
+                  <div className="mt-2 text-[10px] text-purple-700 text-center">
+                    批量模式：先选择“按宽批量 / 按高批量”，只允许输入一边，另一边按每张图原比例自动计算。未输入时不执行。
+                  </div>
+                 )}
             </div>
           )}
         </div>
@@ -837,7 +966,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
         </button>
         <button disabled={disabled} onClick={handleExecuteAll} className={`flex-1 h-10 text-white rounded-lg text-[13px] font-bold shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${mode === 'resize' ? 'bg-purple-600 hover:bg-purple-700' : mode === 'border' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#0B1527] hover:bg-black'}`}>
-          {mode === 'resize' ? `执行当前图像 (${currentIndex + 1} / ${selectedImages.length})` : mode === 'border' ? `加白边 (${selectedImages.length}张)` : `裁切 (${selectedImages.length}张)`}
+          {mode === 'resize' ? (selectedImages.length > 1 ? `批量缩放 (${selectedImages.length}张)` : `执行当前图像 (${currentIndex + 1} / ${selectedImages.length})`) : mode === 'border' ? `加白边 (${selectedImages.length}张)` : `裁切 (${selectedImages.length}张)`}
         </button>
         <button onClick={() => setCurrentIndex(prev => Math.min(selectedImages.length - 1, prev + 1))} disabled={disabled || currentIndex === selectedImages.length - 1} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
