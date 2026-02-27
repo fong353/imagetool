@@ -149,9 +149,12 @@ jobs:
           path: release-assets/windows-no-magick
 
       - name: Create GitHub Release and upload assets
-        uses: softprops/action-gh-release@v2
+        uses: ncipollo/release-action@v1
         with:
-          generate_release_notes: true
-          files: |
+          tag: ${{ github.ref_name }}
+          generateReleaseNotes: true
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: |
             release-assets/macos/**
             release-assets/windows-no-magick/**
