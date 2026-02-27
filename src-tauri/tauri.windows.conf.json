@@ -1,0 +1,13 @@
+{
+  "productName": "imagetool v1.5",
+  "bundle": {
+    "targets": ["nsis"],
+    "externalBin": [],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "fixedRuntime",
+        "path": "webview2-fixed-runtime"
+      }
+    }
+  }
+}
