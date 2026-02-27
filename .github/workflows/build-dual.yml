@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-windows-no-magick:
-    name: Build Windows (no bundled magick + bundled WebView2 installer)
+    name: Build Windows (no bundled magick + fixed WebView2 runtime)
     runs-on: windows-latest
 
     steps:
@@ -29,6 +29,24 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Prepare fixed WebView2 runtime
+        shell: pwsh
+        env:
+          WEBVIEW2_FIXED_RUNTIME_URL: ${{ vars.WEBVIEW2_FIXED_RUNTIME_URL }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WEBVIEW2_FIXED_RUNTIME_URL)) {
+            throw "Repository variable WEBVIEW2_FIXED_RUNTIME_URL is required for fixedRuntime packaging."
+          }
+          $cabPath = Join-Path $pwd "webview2-fixed-runtime.cab"
+          $targetDir = Join-Path $pwd "src-tauri/webview2-fixed-runtime"
+          if (Test-Path $targetDir) {
+            Remove-Item -Path $targetDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $targetDir | Out-Null
+          Invoke-WebRequest -Uri $env:WEBVIEW2_FIXED_RUNTIME_URL -OutFile $cabPath
+          expand $cabPath -F:* $targetDir | Out-Null
+          Remove-Item $cabPath -Force
 
       - name: Build Tauri (Windows config override)
         run: npm run tauri build
