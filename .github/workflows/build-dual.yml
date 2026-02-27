@@ -35,8 +35,22 @@ jobs:
         env:
           WEBVIEW2_FIXED_RUNTIME_URL: ${{ vars.WEBVIEW2_FIXED_RUNTIME_URL }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:WEBVIEW2_FIXED_RUNTIME_URL)) {
-            throw "Repository variable WEBVIEW2_FIXED_RUNTIME_URL is required for fixedRuntime packaging."
+          $downloadUrl = $env:WEBVIEW2_FIXED_RUNTIME_URL
+          if ([string]::IsNullOrWhiteSpace($downloadUrl)) {
+            $downloadPage = "https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download-section"
+            $html = (Invoke-WebRequest -Uri $downloadPage -UseBasicParsing).Content
+            $matches = [regex]::Matches($html, 'https://[^"\s]+Microsoft\.WebView2\.FixedVersionRuntime\.(\d+\.\d+\.\d+\.\d+)\.x64\.cab')
+            if ($matches.Count -eq 0) {
+              throw "Cannot find x64 fixed runtime CAB url from Microsoft download page."
+            }
+            $candidates = foreach ($m in $matches) {
+              [PSCustomObject]@{
+                Url = $m.Value
+                Version = [version]$m.Groups[1].Value
+              }
+            }
+            $downloadUrl = ($candidates | Sort-Object Version -Descending | Select-Object -First 1).Url
+            Write-Host "Auto selected WebView2 fixed runtime URL: $downloadUrl"
           }
           $cabPath = Join-Path $pwd "webview2-fixed-runtime.cab"
           $targetDir = Join-Path $pwd "src-tauri/webview2-fixed-runtime"
@@ -44,7 +58,7 @@ jobs:
             Remove-Item -Path $targetDir -Recurse -Force
           }
           New-Item -ItemType Directory -Path $targetDir | Out-Null
-          Invoke-WebRequest -Uri $env:WEBVIEW2_FIXED_RUNTIME_URL -OutFile $cabPath
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $cabPath
           expand $cabPath -F:* $targetDir | Out-Null
           Remove-Item $cabPath -Force
 
