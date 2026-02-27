@@ -15,8 +15,8 @@ export default function App() {
   useEffect(() => {
     getVersion()
       .then((version) => {
-        const displayVersion = version.startsWith("v") ? version : `v${version}`;
-        const title = `墨印众合图像工具（${displayVersion}）`;
+        const normalizedVersion = version.startsWith("v") ? version.slice(1) : version;
+        const title = `墨印众合-imagetool v${normalizedVersion}`;
         document.title = title;
         getCurrentWindow().setTitle(title).catch(() => {});
       })

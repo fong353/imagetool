@@ -1,5 +1,5 @@
 {
-  "productName": "墨印众合图像工具",
+  "productName": "墨印众合-imagetool",
   "bundle": {
     "targets": ["nsis"],
     "externalBin": [],

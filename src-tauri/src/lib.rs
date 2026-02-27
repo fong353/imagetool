@@ -362,7 +362,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let version = app.package_info().version.to_string();
-            let title = format!("墨印众合图像工具（v{}）", version);
+            let normalized_version = version.strip_prefix('v').unwrap_or(&version);
+            let title = format!("墨印众合-imagetool v{}", normalized_version);
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_title(&title);
             }
