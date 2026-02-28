@@ -267,6 +267,29 @@ async fn process_image(
         }
 
         args.push("-flatten".to_string());
+    } else if mode == "mirror" {
+        let top_px = ((((border_top_cm.max(0.0)) as f64) / 2.54) * src_dpi).round() as u32;
+        let right_px = ((((border_right_cm.max(0.0)) as f64) / 2.54) * src_dpi).round() as u32;
+        let bottom_px = ((((border_bottom_cm.max(0.0)) as f64) / 2.54) * src_dpi).round() as u32;
+        let left_px = ((((border_left_cm.max(0.0)) as f64) / 2.54) * src_dpi).round() as u32;
+
+        let expanded_w = (orig_w.round() as u32)
+            .saturating_add(left_px)
+            .saturating_add(right_px)
+            .max(1);
+        let expanded_h = (orig_h.round() as u32)
+            .saturating_add(top_px)
+            .saturating_add(bottom_px)
+            .max(1);
+
+        args.push("-virtual-pixel".to_string()); args.push("mirror".to_string());
+        args.push("-set".to_string());
+        args.push("option:distort:viewport".to_string());
+        args.push(format!("{}x{}-{}-{}", expanded_w, expanded_h, left_px, top_px));
+        args.push("-filter".to_string()); args.push("point".to_string());
+        args.push("-distort".to_string()); args.push("SRT".to_string()); args.push("0".to_string());
+        args.push("+repage".to_string());
+        args.push("-flatten".to_string());
     } else {
         // Pad mode (等比留白)
         args.push("-resize".to_string()); args.push(format!("{}x{}", target_w_px, target_h_px));

@@ -653,14 +653,14 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
 
           let outW = 20, outH = 20, px = 0, py = 0, pw = 100, ph = 100;
           const finalMode =
-            mode === "border"
-              ? "border"
+            mode === "border" || mode === "mirror"
+              ? mode
               : mode === "crop" || mode === "pad"
                 ? mode
                 : conf.mode;
           if (finalMode === "resize") {
              outW = Number(conf.resizeW) || 1; outH = Number(conf.resizeH) || 1;
-           } else if (finalMode === "border") {
+           } else if (finalMode === "border" || finalMode === "mirror") {
              const [curW, curH] = parseSize(img.size);
              outW = curW;
              outH = curH;
@@ -691,10 +691,10 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
             mode: finalMode,
             targetW: outW,
             targetH: outH,
-            borderTopCm: finalMode === "border" ? (borderTopCm === '' ? Number(conf.borderTopCm ?? 0) : Number(borderTopCm)) : 0,
-            borderRightCm: finalMode === "border" ? (borderRightCm === '' ? Number(conf.borderRightCm ?? 0) : Number(borderRightCm)) : 0,
-            borderBottomCm: finalMode === "border" ? (borderBottomCm === '' ? Number(conf.borderBottomCm ?? 0) : Number(borderBottomCm)) : 0,
-            borderLeftCm: finalMode === "border" ? (borderLeftCm === '' ? Number(conf.borderLeftCm ?? 0) : Number(borderLeftCm)) : 0,
+            borderTopCm: (finalMode === "border" || finalMode === "mirror") ? (borderTopCm === '' ? Number(conf.borderTopCm ?? 0) : Number(borderTopCm)) : 0,
+            borderRightCm: (finalMode === "border" || finalMode === "mirror") ? (borderRightCm === '' ? Number(conf.borderRightCm ?? 0) : Number(borderRightCm)) : 0,
+            borderBottomCm: (finalMode === "border" || finalMode === "mirror") ? (borderBottomCm === '' ? Number(conf.borderBottomCm ?? 0) : Number(borderBottomCm)) : 0,
+            borderLeftCm: (finalMode === "border" || finalMode === "mirror") ? (borderLeftCm === '' ? Number(conf.borderLeftCm ?? 0) : Number(borderLeftCm)) : 0,
             cropData: { x: px, y: py, w: pw, h: ph }
           });
         });
@@ -746,7 +746,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
           >
             <img src={previewUrl} alt="Preview" onLoad={handleImageLoad} style={{ display: 'block', maxWidth: '100%', maxHeight: '176px', width: 'auto', height: 'auto' }} />
           </ReactCrop>
-        ) : mode === "border" ? (
+        ) : mode === "border" || mode === "mirror" ? (
           (() => {
             const [w, h] = parseSize(currentImage?.size);
             const imageAspect = (w > 0 && h > 0) ? (w / h) : 1;
@@ -969,14 +969,84 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
             </div>
           )}
         </div>
+
+        <div className={`border-2 rounded-xl overflow-hidden transition-all duration-300 ${mode === 'mirror' ? 'border-orange-400 shadow-sm bg-white' : 'border-gray-200 bg-gray-50/50 hover:border-orange-200 cursor-pointer'}`}>
+          <div className={`p-2 flex items-center gap-2 ${mode === 'mirror' ? 'bg-orange-50 border-b border-orange-100' : ''}`} onClick={() => !disabled && handleSetMode('mirror')}>
+             <div className={`w-3.5 h-3.5 rounded-full border-2 flex flex-shrink-0 items-center justify-center ${mode === 'mirror' ? 'border-orange-600 bg-orange-600' : 'border-gray-400'}`}>
+               {mode === 'mirror' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+             </div>
+             <span className={`text-[11px] font-bold ${mode === 'mirror' ? 'text-orange-800' : 'text-gray-500'}`}>模块 D：镜像边（包边）</span>
+          </div>
+          {mode === 'mirror' && (
+            <div className="p-3 animate-fade-in-down">
+              <div className="bg-orange-50/60 p-2 rounded-md border border-orange-100">
+                <div className="grid grid-cols-3 gap-2 items-center">
+                  <div></div>
+                  <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
+                    <span>上</span>
+                    <div className="flex items-center gap-1">
+                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderTopCm} onChange={e => handleBorderSideChange("top", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-orange-200 outline-none focus:border-orange-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <span className="text-[10px] text-gray-500">cm</span>
+                    </div>
+                  </label>
+                  <div></div>
+
+                  <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
+                    <span>左</span>
+                    <div className="flex items-center gap-1">
+                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderLeftCm} onChange={e => handleBorderSideChange("left", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-orange-200 outline-none focus:border-orange-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <span className="text-[10px] text-gray-500">cm</span>
+                    </div>
+                  </label>
+
+                  <div className="flex items-center justify-center">
+                    <button
+                      disabled={disabled}
+                      onClick={toggleBorderLink}
+                      className={`p-1.5 rounded border shadow-sm disabled:opacity-40 disabled:cursor-not-allowed ${borderLinked ? 'bg-orange-100 text-orange-700 border-orange-300' : 'bg-white text-gray-400 border-orange-200'}`}
+                      title={borderLinked ? '已联动（四边同步）' : '未联动（四边独立）'}
+                    >
+                      {borderLinked ? (
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M13.2 7.8l-1.4-1.4c-1.5-1.5-4-1.5-5.5 0l-2.8 2.8c-1.5 1.5-1.5 4 0 5.5l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.7-.7-.7-2 0-2.8l2.8-2.8c.8-.8 2-.8 2.8 0l1.4 1.4c.4.4 1 .4 1.4 0s.4-1 0-1.4l-1.4-1.4c-.4-.4-1-.4-1.4 0s-.4 1 0 1.4l1.4 1.4c1.5 1.5 4 1.5 5.5 0l2.8-2.8c1.5-1.5 1.5-4.1 0-5.6z"/></svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                      )}
+                    </button>
+                  </div>
+
+                  <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
+                    <span>右</span>
+                    <div className="flex items-center gap-1">
+                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderRightCm} onChange={e => handleBorderSideChange("right", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-orange-200 outline-none focus:border-orange-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <span className="text-[10px] text-gray-500">cm</span>
+                    </div>
+                  </label>
+
+                  <div></div>
+                  <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
+                    <span>下</span>
+                    <div className="flex items-center gap-1">
+                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderBottomCm} onChange={e => handleBorderSideChange("bottom", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-orange-200 outline-none focus:border-orange-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <span className="text-[10px] text-gray-500">cm</span>
+                    </div>
+                  </label>
+                  <div></div>
+                </div>
+              </div>
+              <div className="text-[10px] text-orange-700 mt-2 text-center">
+                {borderLinked ? "联动中：修改任一方向会同步四边" : "独立模式：上/右/下/左分别设置"}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mt-2 pt-2 border-t border-gray-100 shrink-0 flex items-center justify-between gap-2">
         <button onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))} disabled={disabled || currentIndex === 0} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <button disabled={disabled} onClick={handleExecuteAll} className={`flex-1 h-10 text-white rounded-lg text-[13px] font-bold shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${mode === 'resize' ? 'bg-purple-600 hover:bg-purple-700' : mode === 'border' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#0B1527] hover:bg-black'}`}>
-          {mode === 'resize' ? (selectedImages.length > 1 ? `批量缩放 (${selectedImages.length}张)` : `执行当前图像 (${currentIndex + 1} / ${selectedImages.length})`) : mode === 'border' ? `加白边 (${selectedImages.length}张)` : `裁切 (${selectedImages.length}张)`}
+        <button disabled={disabled} onClick={handleExecuteAll} className={`flex-1 h-10 text-white rounded-lg text-[13px] font-bold shadow-md active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${mode === 'resize' ? 'bg-purple-600 hover:bg-purple-700' : mode === 'border' ? 'bg-emerald-600 hover:bg-emerald-700' : mode === 'mirror' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-[#0B1527] hover:bg-black'}`}>
+          {mode === 'resize' ? (selectedImages.length > 1 ? `批量缩放 (${selectedImages.length}张)` : `执行当前图像 (${currentIndex + 1} / ${selectedImages.length})`) : mode === 'border' ? `加白边 (${selectedImages.length}张)` : mode === 'mirror' ? `镜像包边 (${selectedImages.length}张)` : `裁切 (${selectedImages.length}张)`}
         </button>
         <button onClick={() => setCurrentIndex(prev => Math.min(selectedImages.length - 1, prev + 1))} disabled={disabled || currentIndex === selectedImages.length - 1} className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-gray-100 text-gray-600 rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
