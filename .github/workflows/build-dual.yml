@@ -2,6 +2,11 @@ name: Build Dual Versions
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or commit SHA to build (default: latest default branch)"
+        required: false
+        type: string
   push:
     tags:
       - "v*"
@@ -17,6 +22,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.event.repository.default_branch || 'main' }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -53,6 +60,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.event.repository.default_branch || 'main' }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -131,7 +140,7 @@ jobs:
           Remove-Item $cabPath -Force
 
       - name: Build Tauri (Windows config override)
-        run: npm run tauri build
+        run: npm run tauri build -- --config src-tauri/tauri.windows.conf.json
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
