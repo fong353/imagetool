@@ -206,27 +206,66 @@ async fn process_image(
         args.push("-background".to_string()); args.push("white".to_string());
         args.push("-flatten".to_string());
     } else if mode == "border" {
-        let top_px = (((border_top_cm.max(0.0) as f64) / 2.54) * src_dpi).round() as u32;
-        let right_px = (((border_right_cm.max(0.0) as f64) / 2.54) * src_dpi).round() as u32;
-        let bottom_px = (((border_bottom_cm.max(0.0) as f64) / 2.54) * src_dpi).round() as u32;
-        let left_px = (((border_left_cm.max(0.0) as f64) / 2.54) * src_dpi).round() as u32;
+        let cm_to_px = |cm: f32| -> i32 { (((cm as f64) / 2.54) * src_dpi).round() as i32 };
+
+        let top_px_raw = cm_to_px(border_top_cm);
+        let right_px_raw = cm_to_px(border_right_cm);
+        let bottom_px_raw = cm_to_px(border_bottom_cm);
+        let left_px_raw = cm_to_px(border_left_cm);
+
+        let add_top = top_px_raw.max(0) as u32;
+        let add_right = right_px_raw.max(0) as u32;
+        let add_bottom = bottom_px_raw.max(0) as u32;
+        let add_left = left_px_raw.max(0) as u32;
+
+        let crop_top_raw = (-top_px_raw).max(0) as u32;
+        let crop_right_raw = (-right_px_raw).max(0) as u32;
+        let crop_bottom_raw = (-bottom_px_raw).max(0) as u32;
+        let crop_left_raw = (-left_px_raw).max(0) as u32;
 
         let expanded_w = (orig_w.round() as u32)
-            .saturating_add(left_px)
-            .saturating_add(right_px)
+            .saturating_add(add_left)
+            .saturating_add(add_right)
             .max(1);
         let expanded_h = (orig_h.round() as u32)
-            .saturating_add(top_px)
-            .saturating_add(bottom_px)
+            .saturating_add(add_top)
+            .saturating_add(add_bottom)
+            .max(1);
+
+        let max_crop_w = expanded_w.saturating_sub(1);
+        let crop_left = crop_left_raw.min(max_crop_w);
+        let remaining_w = expanded_w.saturating_sub(crop_left).max(1);
+        let crop_right = crop_right_raw.min(remaining_w.saturating_sub(1));
+
+        let max_crop_h = expanded_h.saturating_sub(1);
+        let crop_top = crop_top_raw.min(max_crop_h);
+        let remaining_h = expanded_h.saturating_sub(crop_top).max(1);
+        let crop_bottom = crop_bottom_raw.min(remaining_h.saturating_sub(1));
+
+        let final_w = expanded_w
+            .saturating_sub(crop_left)
+            .saturating_sub(crop_right)
+            .max(1);
+        let final_h = expanded_h
+            .saturating_sub(crop_top)
+            .saturating_sub(crop_bottom)
             .max(1);
 
         args.push("-background".to_string()); args.push("white".to_string());
         args.push("-gravity".to_string()); args.push("northwest".to_string());
-        args.push("-splice".to_string()); args.push(format!("{}x{}", left_px, top_px));
+        args.push("-splice".to_string()); args.push(format!("{}x{}", add_left, add_top));
         args.push("-gravity".to_string()); args.push("southeast".to_string());
-        args.push("-splice".to_string()); args.push(format!("{}x{}", right_px, bottom_px));
+        args.push("-splice".to_string()); args.push(format!("{}x{}", add_right, add_bottom));
         args.push("-gravity".to_string()); args.push("northwest".to_string());
         args.push("-extent".to_string()); args.push(format!("{}x{}", expanded_w, expanded_h));
+
+        if crop_left > 0 || crop_right > 0 || crop_top > 0 || crop_bottom > 0 {
+            args.push("-gravity".to_string()); args.push("northwest".to_string());
+            args.push("-crop".to_string());
+            args.push(format!("{}x{}+{}+{}", final_w, final_h, crop_left, crop_top));
+            args.push("+repage".to_string());
+        }
+
         args.push("-flatten".to_string());
     } else {
         // Pad mode (等比留白)

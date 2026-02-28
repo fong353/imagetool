@@ -225,7 +225,6 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
        setActivePreset(sourceConf.preset);
        setCustomW(sourceConf.customW); setCustomH(sourceConf.customH);
        setIsLinked(sourceConf.isLinked); setLinkedAspect(sourceConf.linkedAspect);
-       setMode(sourceConf.mode);
        setIsCropFlipped(sourceConf.isCropFlipped || false);
        if (!isBatchResizeMode) {
          setResizeW(sourceConf.resizeW); setResizeH(sourceConf.resizeH); setResizeLinked(sourceConf.resizeLinked);
@@ -311,7 +310,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
       setBorderRightCm(conf.borderRightCm ?? 0.2);
       setBorderBottomCm(conf.borderBottomCm ?? 0.2);
       setBorderLeftCm(conf.borderLeftCm ?? 0.2);
-      setMode(conf.mode); setCrop(conf.crop); setIsCropFlipped(conf.isCropFlipped || false);
+      setCrop(conf.crop); setIsCropFlipped(conf.isCropFlipped || false);
     } else {
       const fallback = getFallbackConfig(origW, origH);
       const aspect = getAspectFromParams(img.naturalWidth, img.naturalHeight, fallback.preset, fallback.customW, fallback.customH, fallback.mode, fallback.isCropFlipped || false);
@@ -499,7 +498,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
 
   const handleBorderSideChange = (side: "top" | "right" | "bottom" | "left", val: string) => {
     const num: number | '' = val === '' ? '' : Number(val);
-    const safe = num === '' ? '' : Math.max(0, num);
+    const safe = num;
 
     if (borderLinked) {
       setBorderTopCm(safe);
@@ -750,42 +749,19 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
         ) : mode === "border" ? (
           (() => {
             const [w, h] = parseSize(currentImage?.size);
-            const bL = Math.max(0, Number(borderLeftCm) || 0);
-            const bR = Math.max(0, Number(borderRightCm) || 0);
-            const bT = Math.max(0, Number(borderTopCm) || 0);
-            const bB = Math.max(0, Number(borderBottomCm) || 0);
-
-            const totalW = Math.max(0.0001, w + bL + bR);
-            const totalH = Math.max(0.0001, h + bT + bB);
-
-            const clampInset = (value: number) => `${Math.min(49, Math.max(0, value))}%`;
-            const insetLeft = clampInset((bL / totalW) * 100);
-            const insetRight = clampInset((bR / totalW) * 100);
-            const insetTop = clampInset((bT / totalH) * 100);
-            const insetBottom = clampInset((bB / totalH) * 100);
+            const imageAspect = (w > 0 && h > 0) ? (w / h) : 1;
 
             return (
               <div
-                className="bg-white shadow border border-gray-200 transition-all duration-300 relative"
+                className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative"
                 style={{
-                  width: "100%",
-                  aspectRatio: totalW / totalH,
+                  aspectRatio: imageAspect,
                   maxHeight: "176px",
                   maxWidth: "100%",
                   padding: "0px"
                 }}
               >
-                <div
-                  className="absolute bg-white border border-gray-300"
-                  style={{
-                    left: insetLeft,
-                    right: insetRight,
-                    top: insetTop,
-                    bottom: insetBottom
-                  }}
-                >
-                  <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="w-full h-full object-contain" />
-                </div>
+                <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="w-full h-full object-contain" />
               </div>
             );
           })()
@@ -939,7 +915,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
                   <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
                     <span>上</span>
                     <div className="flex items-center gap-1">
-                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderTopCm} onChange={e => handleBorderSideChange("top", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <input disabled={disabled} type="number" step="0.1" value={borderTopCm} onChange={e => handleBorderSideChange("top", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
                       <span className="text-[10px] text-gray-500">cm</span>
                     </div>
                   </label>
@@ -948,7 +924,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
                   <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
                     <span>左</span>
                     <div className="flex items-center gap-1">
-                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderLeftCm} onChange={e => handleBorderSideChange("left", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <input disabled={disabled} type="number" step="0.1" value={borderLeftCm} onChange={e => handleBorderSideChange("left", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
                       <span className="text-[10px] text-gray-500">cm</span>
                     </div>
                   </label>
@@ -971,7 +947,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
                   <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
                     <span>右</span>
                     <div className="flex items-center gap-1">
-                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderRightCm} onChange={e => handleBorderSideChange("right", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <input disabled={disabled} type="number" step="0.1" value={borderRightCm} onChange={e => handleBorderSideChange("right", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
                       <span className="text-[10px] text-gray-500">cm</span>
                     </div>
                   </label>
@@ -980,7 +956,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
                   <label className="flex flex-col items-center gap-1 text-[11px] font-bold text-gray-600">
                     <span>下</span>
                     <div className="flex items-center gap-1">
-                      <input disabled={disabled} type="number" min="0" step="0.1" value={borderBottomCm} onChange={e => handleBorderSideChange("bottom", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
+                      <input disabled={disabled} type="number" step="0.1" value={borderBottomCm} onChange={e => handleBorderSideChange("bottom", e.target.value)} className="w-16 px-1 py-1 text-xs font-bold text-center border rounded border-emerald-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed" />
                       <span className="text-[10px] text-gray-500">cm</span>
                     </div>
                   </label>
