@@ -17,14 +17,15 @@ if (!targetVersion) {
 }
 
 const cargoToml = readFileSync(cargoTomlPath, "utf8");
-const updatedCargoToml = cargoToml.replace(
-  /^version\s*=\s*"[^"]+"/m,
-  `version = "${targetVersion}"`
-);
-
-if (updatedCargoToml === cargoToml) {
+const versionFieldPattern = /^version\s*=\s*"[^"]+"/m;
+if (!versionFieldPattern.test(cargoToml)) {
   throw new Error("未在 Cargo.toml 中找到可替换的 version 字段");
 }
+
+const updatedCargoToml = cargoToml.replace(
+  versionFieldPattern,
+  `version = "${targetVersion}"`
+);
 
 writeFileSync(cargoTomlPath, updatedCargoToml, "utf8");
 console.log(`已同步版本到 Cargo.toml: ${targetVersion}`);
