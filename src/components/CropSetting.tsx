@@ -98,6 +98,27 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
   const [imgRef, setImgRef] = useState<HTMLImageElement | null>(null);
 
   useEffect(() => {
+    const handleConfigImported = () => {
+      const saved = localStorage.getItem("user_custom_presets");
+      if (!saved) {
+        setPresets([]);
+        return;
+      }
+      try {
+        const parsed = JSON.parse(saved) as unknown;
+        setPresets(Array.isArray(parsed) ? parsed as CustomPreset[] : []);
+      } catch {
+        setPresets([]);
+      }
+    };
+
+    window.addEventListener("imagetool-config-imported", handleConfigImported);
+    return () => {
+      window.removeEventListener("imagetool-config-imported", handleConfigImported);
+    };
+  }, []);
+
+  useEffect(() => {
     if (selectedImages.length === 0) {
       setConfigs({});
       configsRef.current = {};
@@ -727,34 +748,47 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
             <img src={previewUrl} alt="Preview" onLoad={handleImageLoad} style={{ display: 'block', maxWidth: '100%', maxHeight: '176px', width: 'auto', height: 'auto' }} />
           </ReactCrop>
         ) : mode === "border" ? (
-          <div
-            className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative"
-            style={{
-              aspectRatio: (() => {
-                const [w, h] = parseSize(currentImage?.size);
-                const bL = Number(borderLeftCm) || 0;
-                const bR = Number(borderRightCm) || 0;
-                const bT = Number(borderTopCm) || 0;
-                const bB = Number(borderBottomCm) || 0;
-                return (w + bL + bR) / (h + bT + bB);
-              })(),
-              maxHeight: "176px",
-              maxWidth: "100%",
-              padding: "0px"
-            }}
-          >
-            <div
-              className="w-full h-full bg-white border border-gray-300 flex items-center justify-center"
-              style={{
-                paddingTop: `${Math.min(35, Math.max(0, (Number(borderTopCm) || 0) * 10))}%`,
-                paddingRight: `${Math.min(35, Math.max(0, (Number(borderRightCm) || 0) * 10))}%`,
-                paddingBottom: `${Math.min(35, Math.max(0, (Number(borderBottomCm) || 0) * 10))}%`,
-                paddingLeft: `${Math.min(35, Math.max(0, (Number(borderLeftCm) || 0) * 10))}%`
-              }}
-            >
-              <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="w-full h-full object-contain" />
-            </div>
-          </div>
+          (() => {
+            const [w, h] = parseSize(currentImage?.size);
+            const bL = Math.max(0, Number(borderLeftCm) || 0);
+            const bR = Math.max(0, Number(borderRightCm) || 0);
+            const bT = Math.max(0, Number(borderTopCm) || 0);
+            const bB = Math.max(0, Number(borderBottomCm) || 0);
+
+            const totalW = Math.max(0.0001, w + bL + bR);
+            const totalH = Math.max(0.0001, h + bT + bB);
+
+            const clampInset = (value: number) => `${Math.min(49, Math.max(0, value))}%`;
+            const insetLeft = clampInset((bL / totalW) * 100);
+            const insetRight = clampInset((bR / totalW) * 100);
+            const insetTop = clampInset((bT / totalH) * 100);
+            const insetBottom = clampInset((bB / totalH) * 100);
+
+            return (
+              <div
+                className="bg-white shadow border border-gray-200 transition-all duration-300 relative"
+                style={{
+                  width: "100%",
+                  aspectRatio: totalW / totalH,
+                  maxHeight: "176px",
+                  maxWidth: "100%",
+                  padding: "0px"
+                }}
+              >
+                <div
+                  className="absolute bg-white border border-gray-300"
+                  style={{
+                    left: insetLeft,
+                    right: insetRight,
+                    top: insetTop,
+                    bottom: insetBottom
+                  }}
+                >
+                  <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="w-full h-full object-contain" />
+                </div>
+              </div>
+            );
+          })()
         ) : (
           <div className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative" style={{ aspectRatio: mode === 'resize' ? (Number(resizeW) || 1) / (Number(resizeH) || 1) : getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH, mode, isCropFlipped), maxHeight: '176px', maxWidth: '100%', padding: '0px' }}>
             <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="w-full h-full object-contain" />

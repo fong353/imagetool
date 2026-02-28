@@ -11,6 +11,26 @@ import { PAPER_CATEGORIES } from "./components/PaperSetting";
 import CropSetting, { ProcessPayload } from "./components/CropSetting";
 import ReplicateSetting from "./components/ReplicateSetting";
 
+const readStoredString = (key: string, fallback: string) => {
+  const stored = localStorage.getItem(key);
+  return stored ?? fallback;
+};
+
+const readStoredNumber = (key: string, fallback: number) => {
+  const stored = localStorage.getItem(key);
+  if (!stored) return fallback;
+  const parsed = Number(stored);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const readStoredTab = (): "paper" | "crop" | "replicate" | "cost" => {
+  const stored = localStorage.getItem("app_active_tab");
+  if (stored === "paper" || stored === "crop" || stored === "replicate" || stored === "cost") {
+    return stored;
+  }
+  return "crop";
+};
+
 export default function App() {
   useEffect(() => {
     getVersion()
@@ -34,14 +54,14 @@ export default function App() {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   
-  const [activePaper, setActivePaper] = useState(PAPER_CATEGORIES[0]);
-  const [customPaper, setCustomPaper] = useState(""); 
-  const [activeCraft, setActiveCraft] = useState("无"); 
+  const [activePaper, setActivePaper] = useState(() => readStoredString("app_active_paper", PAPER_CATEGORIES[0]));
+  const [customPaper, setCustomPaper] = useState(() => readStoredString("app_custom_paper_input", "")); 
+  const [activeCraft, setActiveCraft] = useState(() => readStoredString("app_active_craft", "无")); 
   
-  const [zoomWidth, setZoomWidth] = useState(DEFAULT_ZOOM);
+  const [zoomWidth, setZoomWidth] = useState(() => readStoredNumber("app_zoom_width", DEFAULT_ZOOM));
   
   // 🌟 修复点 1：默认启动页面设为 "crop" (图像排版)
-  const [activeTab, setActiveTab] = useState<"paper" | "crop" | "replicate" | "cost">("crop");
+  const [activeTab, setActiveTab] = useState<"paper" | "crop" | "replicate" | "cost">(() => readStoredTab());
   
   const [replicateCounts, setReplicateCounts] = useState<Record<string, number>>({});
   const [costQuantities, setCostQuantities] = useState<Record<string, number>>({});
@@ -56,6 +76,26 @@ export default function App() {
   });
 
   const isProcessing = progress.isProcessing;
+
+  useEffect(() => {
+    localStorage.setItem("app_active_paper", activePaper);
+  }, [activePaper]);
+
+  useEffect(() => {
+    localStorage.setItem("app_custom_paper_input", customPaper);
+  }, [customPaper]);
+
+  useEffect(() => {
+    localStorage.setItem("app_active_craft", activeCraft);
+  }, [activeCraft]);
+
+  useEffect(() => {
+    localStorage.setItem("app_zoom_width", String(zoomWidth));
+  }, [zoomWidth]);
+
+  useEffect(() => {
+    localStorage.setItem("app_active_tab", activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     const unlistenPromise = getCurrentWebview().onDragDropEvent((event) => {

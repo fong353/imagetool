@@ -8,6 +8,52 @@ export const PAPER_CATEGORIES = [
 
 export const CRAFT_CATEGORIES = ["做框", "卡纸框", "无"];
 
+const STORAGE_KEY_PAPERS = "app_custom_papers";
+const STORAGE_KEY_CRAFTS = "app_custom_crafts";
+const STORAGE_KEY_PRESETS = "user_custom_presets";
+const STORAGE_PREFIXES = ["app_", "user_"];
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const readArraySetting = (key: string, fallback: string[]) => {
+  const saved = localStorage.getItem(key);
+  if (!saved) return fallback;
+  try {
+    const parsed = JSON.parse(saved) as unknown;
+    return isStringArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const collectNamespacedStorage = () => {
+  const data: Record<string, unknown> = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))) continue;
+    const raw = localStorage.getItem(key);
+    if (raw == null) continue;
+    try {
+      data[key] = JSON.parse(raw) as unknown;
+    } catch {
+      data[key] = raw;
+    }
+  }
+  return data;
+};
+
+const applyNamespacedStorage = (storage: Record<string, unknown>) => {
+  Object.entries(storage).forEach(([key, value]) => {
+    if (!STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))) return;
+    if (typeof value === "string") {
+      localStorage.setItem(key, value);
+      return;
+    }
+    localStorage.setItem(key, JSON.stringify(value));
+  });
+};
+
 interface PaperSettingProps {
   activePaper: string;
   setActivePaper: (paper: string) => void;
@@ -26,13 +72,11 @@ export default function PaperSetting({
 }: PaperSettingProps) {
 
   const [papers, setPapers] = useState<string[]>(() => {
-    const saved = localStorage.getItem('app_custom_papers');
-    return saved ? JSON.parse(saved) : PAPER_CATEGORIES;
+    return readArraySetting(STORAGE_KEY_PAPERS, PAPER_CATEGORIES);
   });
 
   const [crafts, setCrafts] = useState<string[]>(() => {
-    const saved = localStorage.getItem('app_custom_crafts');
-    return saved ? JSON.parse(saved) : CRAFT_CATEGORIES;
+    return readArraySetting(STORAGE_KEY_CRAFTS, CRAFT_CATEGORIES);
   });
 
   const [isEditMode, setIsEditMode] = useState(false);
@@ -52,36 +96,63 @@ export default function PaperSetting({
   const handleAddPaper = () => {
     if (!newPaper.trim() || papers.includes(newPaper.trim())) return;
     const updated = [...papers, newPaper.trim()];
-    setPapers(updated); localStorage.setItem('app_custom_papers', JSON.stringify(updated));
+    setPapers(updated); localStorage.setItem(STORAGE_KEY_PAPERS, JSON.stringify(updated));
     setNewPaper("");
   };
 
   const handleDeletePaper = (e: React.MouseEvent, paper: string) => {
     e.stopPropagation();
     const updated = papers.filter(p => p !== paper);
-    setPapers(updated); localStorage.setItem('app_custom_papers', JSON.stringify(updated));
+    setPapers(updated); localStorage.setItem(STORAGE_KEY_PAPERS, JSON.stringify(updated));
   };
 
   const handleAddCraft = () => {
     if (!newCraft.trim() || crafts.includes(newCraft.trim())) return;
     const updated = [...crafts, newCraft.trim()];
-    setCrafts(updated); localStorage.setItem('app_custom_crafts', JSON.stringify(updated));
+    setCrafts(updated); localStorage.setItem(STORAGE_KEY_CRAFTS, JSON.stringify(updated));
     setNewCraft("");
   };
 
   const handleDeleteCraft = (e: React.MouseEvent, craft: string) => {
     e.stopPropagation();
     const updated = crafts.filter(c => c !== craft);
-    setCrafts(updated); localStorage.setItem('app_custom_crafts', JSON.stringify(updated));
+    setCrafts(updated); localStorage.setItem(STORAGE_KEY_CRAFTS, JSON.stringify(updated));
   };
 
   const handleExportConfig = () => {
-    const configData = { papers, crafts };
+    let customPresets: unknown[] = [];
+    const presetRaw = localStorage.getItem(STORAGE_KEY_PRESETS);
+    if (presetRaw) {
+      try {
+        const parsed = JSON.parse(presetRaw) as unknown;
+        if (Array.isArray(parsed)) customPresets = parsed;
+      } catch {}
+    }
+
+    const configData = {
+      schemaVersion: 2,
+      app: "imagetool",
+      exportedAt: new Date().toISOString(),
+      papers,
+      crafts,
+      paperSetting: {
+        papers,
+        crafts,
+        activePaper,
+        customPaper,
+        activeCraft
+      },
+      cropSetting: {
+        customPresets
+      },
+      storage: collectNamespacedStorage()
+    };
     const blob = new Blob([JSON.stringify(configData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'imagetool_config.json';
+    const dateTag = new Date().toISOString().slice(0, 10);
+    a.download = `imagetool_config_${dateTag}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -95,18 +166,56 @@ export default function PaperSetting({
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const data = JSON.parse(event.target?.result as string);
-        if (data.papers && Array.isArray(data.papers) && data.crafts && Array.isArray(data.crafts)) {
-          setPapers(data.papers);
-          setCrafts(data.crafts);
-          localStorage.setItem('app_custom_papers', JSON.stringify(data.papers));
-          localStorage.setItem('app_custom_crafts', JSON.stringify(data.crafts));
-          alert("✅ 车间配置导入成功！数据已同步。");
-          setIsEditMode(false); 
-        } else {
-          alert("❌ 配置文件格式错误，缺少必要的字典字段。");
+        const data = JSON.parse(event.target?.result as string) as {
+          papers?: unknown;
+          crafts?: unknown;
+          paperSetting?: {
+            papers?: unknown;
+            crafts?: unknown;
+            activePaper?: unknown;
+            customPaper?: unknown;
+            activeCraft?: unknown;
+          };
+          cropSetting?: {
+            customPresets?: unknown;
+          };
+          storage?: Record<string, unknown>;
+        };
+
+        const importedPapers = isStringArray(data.paperSetting?.papers)
+          ? data.paperSetting.papers
+          : (isStringArray(data.papers) ? data.papers : null);
+
+        const importedCrafts = isStringArray(data.paperSetting?.crafts)
+          ? data.paperSetting.crafts
+          : (isStringArray(data.crafts) ? data.crafts : null);
+
+        if (!importedPapers || !importedCrafts) {
+          alert("❌ 配置文件格式错误，缺少必要的纸张/工艺数据。");
+          return;
         }
-      } catch (error) {
+
+        if (data.storage && typeof data.storage === "object") {
+          applyNamespacedStorage(data.storage);
+        }
+
+        setPapers(importedPapers);
+        setCrafts(importedCrafts);
+        localStorage.setItem(STORAGE_KEY_PAPERS, JSON.stringify(importedPapers));
+        localStorage.setItem(STORAGE_KEY_CRAFTS, JSON.stringify(importedCrafts));
+
+        if (Array.isArray(data.cropSetting?.customPresets)) {
+          localStorage.setItem(STORAGE_KEY_PRESETS, JSON.stringify(data.cropSetting.customPresets));
+        }
+
+        if (typeof data.paperSetting?.activePaper === "string") setActivePaper(data.paperSetting.activePaper);
+        if (typeof data.paperSetting?.customPaper === "string") setCustomPaper(data.paperSetting.customPaper);
+        if (typeof data.paperSetting?.activeCraft === "string") setActiveCraft(data.paperSetting.activeCraft);
+
+        window.dispatchEvent(new CustomEvent("imagetool-config-imported"));
+        alert("✅ 配置导入成功！已同步纸张、工艺、预设及应用配置。");
+        setIsEditMode(false);
+      } catch {
         alert("❌ 读取配置文件失败，请确保导入的是合法的 JSON 文件。");
       }
     };
@@ -136,7 +245,7 @@ export default function PaperSetting({
         {isEditMode && (
           <div className="flex gap-2 mb-4 p-2 bg-gray-100 rounded-lg border border-gray-200 shadow-inner">
              <button disabled={disabled} onClick={handleExportConfig} className="flex-1 bg-white border border-gray-300 text-gray-700 px-2 py-1.5 rounded text-xs font-bold hover:bg-gray-50 shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-               ⬇️ 导出配置 (.json)
+               ⬇️ 导出全部配置 (.json)
              </button>
              <button disabled={disabled} onClick={() => fileInputRef.current?.click()} className="flex-1 bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-blue-700 shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                ⬆️ 导入配置
