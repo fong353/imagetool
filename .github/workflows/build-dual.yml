@@ -15,9 +15,36 @@ permissions:
   contents: write
 
 jobs:
+  resolve-version:
+    name: Resolve app version
+    runs-on: ubuntu-latest
+    outputs:
+      app_version: ${{ steps.resolve.outputs.app_version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.event.repository.default_branch || 'main' }}
+
+      - name: Resolve version
+        id: resolve
+        shell: bash
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            APP_VERSION="${GITHUB_REF_NAME#v}"
+          else
+            APP_VERSION="$PACKAGE_VERSION"
+          fi
+          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+
   build-macos:
     name: Build macOS (unchanged)
     runs-on: macos-latest
+    needs: resolve-version
+    env:
+      APP_VERSION: ${{ needs.resolve-version.outputs.app_version }}
 
     steps:
       - name: Checkout
@@ -37,11 +64,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Sync app version from Git tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Sync app version
         run: |
-          TARGET_VERSION="${GITHUB_REF_NAME#v}"
-          npm version "$TARGET_VERSION" --no-git-tag-version
+          npm version "$APP_VERSION" --no-git-tag-version
 
       - name: Build Tauri (macOS default config)
         run: npm run tauri build
@@ -56,6 +81,9 @@ jobs:
   build-windows-no-magick:
     name: Build Windows (no bundled magick + fixed WebView2 runtime)
     runs-on: windows-latest
+    needs: resolve-version
+    env:
+      APP_VERSION: ${{ needs.resolve-version.outputs.app_version }}
 
     steps:
       - name: Checkout
@@ -75,12 +103,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Sync app version from Git tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Sync app version
         shell: pwsh
         run: |
-          $targetVersion = $env:GITHUB_REF_NAME.Substring(1)
-          npm version $targetVersion --no-git-tag-version
+          npm version $env:APP_VERSION --no-git-tag-version
 
       - name: Prepare fixed WebView2 runtime
         shell: pwsh
