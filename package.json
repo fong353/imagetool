@@ -1,13 +1,15 @@
 {
   "name": "imagetool",
   "private": true,
-  "version": "1.5.0",
+  "version": "1.5.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "version:sync": "node scripts/sync-version.mjs",
+    "version": "npm run version:sync"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
