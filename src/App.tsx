@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
@@ -31,7 +31,19 @@ const readStoredTab = (): "paper" | "crop" | "replicate" | "cost" => {
   return "crop";
 };
 
+const SIDEBAR_MIN_WIDTH = 280;
+const SIDEBAR_MAX_WIDTH = 520;
+const LEFT_MIN_WIDTH = 360;
+const SPLITTER_WIDTH = 4;
+
+const clampSidebarWidth = (width: number, containerWidth: number) => {
+  const maxByContainer = Math.max(SIDEBAR_MIN_WIDTH, containerWidth - LEFT_MIN_WIDTH - SPLITTER_WIDTH);
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.min(width, maxByContainer)));
+};
+
 export default function App() {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     getVersion()
       .then((version) => {
@@ -59,6 +71,8 @@ export default function App() {
   const [activeCraft, setActiveCraft] = useState(() => readStoredString("app_active_craft", "无")); 
   
   const [zoomWidth, setZoomWidth] = useState(() => readStoredNumber("app_zoom_width", DEFAULT_ZOOM));
+  const [sidebarWidth, setSidebarWidth] = useState(() => readStoredNumber("app_sidebar_width", 288));
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   
   // 🌟 修复点 1：默认启动页面设为 "crop" (图像排版)
   const [activeTab, setActiveTab] = useState<"paper" | "crop" | "replicate" | "cost">(() => readStoredTab());
@@ -94,8 +108,53 @@ export default function App() {
   }, [zoomWidth]);
 
   useEffect(() => {
+    localStorage.setItem("app_sidebar_width", String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
     localStorage.setItem("app_active_tab", activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    const normalizeSidebarWidth = () => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setSidebarWidth((prev) => clampSidebarWidth(prev, rect.width));
+    };
+
+    normalizeSidebarWidth();
+    window.addEventListener("resize", normalizeSidebarWidth);
+    return () => window.removeEventListener("resize", normalizeSidebarWidth);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingSidebar) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const nextWidth = rect.right - event.clientX;
+      setSidebarWidth(clampSidebarWidth(nextWidth, rect.width));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingSidebar(false);
+    };
+
+    const previousCursor = document.body.style.cursor;
+    const previousSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousSelect;
+    };
+  }, [isResizingSidebar]);
 
   useEffect(() => {
     const unlistenPromise = getCurrentWebview().onDragDropEvent((event) => {
@@ -416,21 +475,34 @@ export default function App() {
     : "等待任务";
 
   return (
-    <div className="flex h-screen w-screen p-5 gap-4 bg-[#f3f4f6] text-gray-800 font-sans">
-      {activeTab === "cost" ? (
-        <ListImageView images={images} disabled={isProcessing} onToggleSelect={toggleSelect} onSelectAll={selectAll} onDeselectAll={deselectAll} onClearAll={clearAll} costQuantities={costQuantities} onUpdateCostQuantity={(path, qty) => setCostQuantities(prev => ({ ...prev, [path]: qty }))} onRemoveOne={(path) => { setImages(prev => prev.filter(img => img.path !== path)); setReplicateCounts(prev => { const c = { ...prev }; delete c[path]; return c; }); setCostQuantities(prev => { const c = { ...prev }; delete c[path]; return c; }); }} />
-      ) : (
-        <ImageGrid 
-          images={images} isDragging={isDragging} zoomWidth={zoomWidth} setZoomWidth={setZoomWidth}
-          disabled={isProcessing}
-          onToggleSelect={toggleSelect} onSelectAll={selectAll} onDeselectAll={deselectAll} 
-          onClearAll={clearAll} onRemoveSelected={removeSelected}
-          activeTab={activeTab} replicateCounts={replicateCounts}
-          onUpdateCount={(path, count) => setReplicateCounts(prev => ({ ...prev, [path]: count }))}
-          onRemoveOne={(path) => { setImages(prev => prev.filter(img => img.path !== path)); setReplicateCounts(prev => { const c = { ...prev }; delete c[path]; return c; }); }}
-        />
-      )}
-      <div className="w-72 flex flex-col gap-3 h-full shrink-0">
+    <div ref={containerRef} className="flex h-screen w-screen p-5 gap-3 bg-[#f3f4f6] text-gray-800 font-sans">
+      <div className="flex-1 min-w-0">
+        {activeTab === "cost" ? (
+          <ListImageView images={images} disabled={isProcessing} onToggleSelect={toggleSelect} onSelectAll={selectAll} onDeselectAll={deselectAll} onClearAll={clearAll} costQuantities={costQuantities} onUpdateCostQuantity={(path, qty) => setCostQuantities(prev => ({ ...prev, [path]: qty }))} onRemoveOne={(path) => { setImages(prev => prev.filter(img => img.path !== path)); setReplicateCounts(prev => { const c = { ...prev }; delete c[path]; return c; }); setCostQuantities(prev => { const c = { ...prev }; delete c[path]; return c; }); }} />
+        ) : (
+          <ImageGrid 
+            images={images} isDragging={isDragging} zoomWidth={zoomWidth} setZoomWidth={setZoomWidth}
+            disabled={isProcessing}
+            onToggleSelect={toggleSelect} onSelectAll={selectAll} onDeselectAll={deselectAll} 
+            onClearAll={clearAll} onRemoveSelected={removeSelected}
+            activeTab={activeTab} replicateCounts={replicateCounts}
+            onUpdateCount={(path, count) => setReplicateCounts(prev => ({ ...prev, [path]: count }))}
+            onRemoveOne={(path) => { setImages(prev => prev.filter(img => img.path !== path)); setReplicateCounts(prev => { const c = { ...prev }; delete c[path]; return c; }); }}
+          />
+        )}
+      </div>
+
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        onMouseDown={(event) => {
+          event.preventDefault();
+          setIsResizingSidebar(true);
+        }}
+        className={`w-1 shrink-0 rounded cursor-col-resize transition-colors ${isResizingSidebar ? "bg-blue-400" : "bg-gray-300 hover:bg-gray-400"}`}
+      />
+
+      <div style={{ width: `${sidebarWidth}px` }} className="flex flex-col gap-3 h-full shrink-0">
         <div className="flex bg-white p-1 rounded-lg shadow-sm border border-gray-100 shrink-0">
           <button disabled={isProcessing} onClick={() => setActiveTab("crop")} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed ${activeTab === "crop" ? "bg-gray-100 text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-700"}`}>图像处理</button>
           <button disabled={isProcessing} onClick={() => setActiveTab("paper")} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed ${activeTab === "paper" ? "bg-gray-100 text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-700"}`}>纸张分配</button>
@@ -455,7 +527,7 @@ export default function App() {
         {activeTab !== "cost" && (
           <div className="flex-1 min-h-0 overflow-y-auto">
             {activeTab === "crop" && (
-              <CropSetting selectedImages={selectedImages} disabled={isProcessing} onProcessAll={handleProcessAll} />
+              <CropSetting selectedImages={selectedImages} panelWidth={sidebarWidth} disabled={isProcessing} onProcessAll={handleProcessAll} />
             )}
             {activeTab === "paper" && (
               <Sidebar activePaper={activePaper} setActivePaper={setActivePaper} customPaper={customPaper} setCustomPaper={setCustomPaper} activeCraft={activeCraft} setActiveCraft={setActiveCraft} selectedImages={selectedImages} disabled={isProcessing} onExecuteRename={handleRename} />

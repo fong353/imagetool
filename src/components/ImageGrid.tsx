@@ -30,7 +30,7 @@ export default function ImageGrid({
   const selectionEnabled = activeTab !== "replicate";
 
   return (
-    <div className={`flex-1 flex flex-col border-2 border-dashed rounded-3xl transition-all duration-300 ease-out overflow-hidden relative ${isDragging ? "border-blue-500 bg-blue-50/50 scale-[1.01] shadow-inner" : "border-gray-300 bg-white shadow-sm"}`}>
+    <div className={`flex-1 flex flex-col border-2 rounded-3xl transition-all duration-300 ease-out overflow-hidden relative ${isDragging ? "border-blue-500 bg-blue-50/50 scale-[1.01] shadow-inner" : "border-transparent bg-white shadow-sm"}`}>
       {images.length > 0 && (
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-gray-50/50">
           <div className="flex items-center gap-4">

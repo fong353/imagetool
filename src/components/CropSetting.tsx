@@ -18,6 +18,7 @@ export interface ProcessPayload {
 
 interface CropSettingProps {
   selectedImages: ImageItem[];
+  panelWidth?: number;
   disabled?: boolean;
   onProcessAll: (payloads: ProcessPayload[]) => void;
 }
@@ -54,7 +55,7 @@ const parseSize = (sizeStr?: string): [number, number] => {
   return [20, 20];
 };
 
-export default function CropSetting({ selectedImages, disabled, onProcessAll }: CropSettingProps) {
+export default function CropSetting({ selectedImages, panelWidth = 288, disabled, onProcessAll }: CropSettingProps) {
   const [ , setConfigs] = useState<Record<string, ImageConfig>>({});
   const configsRef = useRef<Record<string, ImageConfig>>({});
 
@@ -144,6 +145,8 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
   };
 
   const currentImage = selectedImages.length > 0 ? selectedImages[currentIndex] : undefined;
+  const previewBoxHeight = Math.max(192, Math.min(360, Math.round(panelWidth * 0.72)));
+  const previewImageMaxHeight = Math.max(160, previewBoxHeight - 16);
 
   const updateConfig = (path: string, updates: Partial<ImageConfig>) => {
     setConfigs(prev => {
@@ -730,7 +733,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
 
   return (
     <div className="flex flex-col flex-1 bg-white p-3 rounded-xl shadow-sm border border-gray-100 h-full min-h-0 relative">
-      <div className="w-full h-48 bg-gray-50/80 rounded-lg overflow-hidden mb-3 border border-gray-200 flex flex-col items-center justify-center p-1.5 shrink-0 relative group">
+      <div style={{ height: `${previewBoxHeight}px` }} className="w-full bg-gray-50/80 rounded-lg overflow-hidden mb-3 border border-gray-200 flex flex-col items-center justify-center p-1.5 shrink-0 relative group">
         <div className="absolute top-2 left-2 z-10 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded backdrop-blur-sm font-bold shadow-sm">
           正在查阅: {currentIndex + 1} / {selectedImages.length}
         </div>
@@ -744,7 +747,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
              aspect={getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH, mode, isCropFlipped)} 
              className="flex-shrink-0"
           >
-            <img src={previewUrl} alt="Preview" onLoad={handleImageLoad} style={{ display: 'block', maxWidth: '100%', maxHeight: '176px', width: 'auto', height: 'auto' }} />
+            <img src={previewUrl} alt="Preview" onLoad={handleImageLoad} style={{ display: 'block', maxWidth: '100%', maxHeight: `${previewImageMaxHeight}px`, width: 'auto', height: 'auto' }} />
           </ReactCrop>
         ) : mode === "border" || mode === "mirror" ? (
           (() => {
@@ -756,7 +759,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
                 className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative"
                 style={{
                   aspectRatio: imageAspect,
-                  maxHeight: "176px",
+                  maxHeight: `${previewImageMaxHeight}px`,
                   maxWidth: "100%",
                   padding: "0px"
                 }}
@@ -766,7 +769,7 @@ export default function CropSetting({ selectedImages, disabled, onProcessAll }: 
             );
           })()
         ) : (
-          <div className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative" style={{ aspectRatio: mode === 'resize' ? (Number(resizeW) || 1) / (Number(resizeH) || 1) : getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH, mode, isCropFlipped), maxHeight: '176px', maxWidth: '100%', padding: '0px' }}>
+          <div className="bg-white shadow border border-gray-200 flex items-center justify-center transition-all duration-300 relative" style={{ aspectRatio: mode === 'resize' ? (Number(resizeW) || 1) / (Number(resizeH) || 1) : getAspectFromParams(imgRef?.naturalWidth||1, imgRef?.naturalHeight||1, activePreset, customW, customH, mode, isCropFlipped), maxHeight: `${previewImageMaxHeight}px`, maxWidth: '100%', padding: '0px' }}>
             <img src={previewUrl} onLoad={handleImageLoad} alt="Preview" className="w-full h-full object-contain" />
           </div>
         )}
