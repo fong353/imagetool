@@ -3,6 +3,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
+import { listen } from "@tauri-apps/api/event";
 import { ImageItem, ProcessProgress } from "./types";
 import Sidebar from "./components/Sidebar";
 import ImageGrid, { DEFAULT_ZOOM } from "./components/ImageGrid";
@@ -189,6 +190,39 @@ export default function App() {
           }
         });
       }
+    });
+    return () => { unlistenPromise.then((unlisten) => unlisten()); };
+  }, []);
+
+  // 监听从 Finder 拖图标打开文件（macOS）
+  useEffect(() => {
+    const unlistenPromise = listen<string[]>("dock-file-drop", (event) => {
+      const filePaths = event.payload || [];
+      if (filePaths.length === 0) return;
+
+      const newImages: ImageItem[] = filePaths.map((path: string) => {
+        const fileName = path.split(/[\\/]/).pop() || "未知文件";
+        const isSupported = /\.(jpg|jpeg|tif|tiff|png|psd)$/i.test(path);
+        return { path, url: "", name: fileName, selected: false, size: isSupported ? "解析生成中..." : "⚠️ 不支持", isSupported };
+      });
+
+      setImages(prev => [...prev, ...newImages]);
+
+      newImages.forEach(async (img) => {
+        if (img.isSupported) {
+          try {
+            const [sizeStr, thumbUrl, meta] = await Promise.all([
+              invoke<string>("get_image_size", { pathStr: img.path }),
+              invoke<string>("generate_thumbnail", { pathStr: img.path }),
+              invoke<any>("get_image_meta", { pathStr: img.path })
+            ]);
+            const finalUrl = withPreviewCacheBuster(thumbUrl);
+            setImages(prev => prev.map(p => p.path === img.path ? { ...p, size: sizeStr, url: finalUrl, dpi: meta?.dpi } : p));
+          } catch (error) {
+            setImages(prev => prev.map(p => p.path === img.path ? { ...p, size: "尺寸未知" } : p));
+          }
+        }
+      });
     });
     return () => { unlistenPromise.then((unlisten) => unlisten()); };
   }, []);

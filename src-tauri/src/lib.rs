@@ -1,7 +1,7 @@
 use std::path::Path;
 use base64::{engine::general_purpose, Engine as _};
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{Manager, Emitter};
 
 // ==========================================
 // 🌟 辅助引擎：跨平台 Magick 唤醒器
@@ -422,6 +422,7 @@ async fn replicate_image(path_str: String, total_copies: u32) -> Result<Vec<Stri
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             let version = app.package_info().version.to_string();
             let normalized_version = version.strip_prefix('v').unwrap_or(&version);
@@ -429,6 +430,33 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_title(&title);
             }
+
+            // 监听从 Finder 拖图标打开文件的事件，将文件路径转发给前端
+            #[cfg(target_os = "macos")]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    let paths: Vec<String> = event.urls()
+                        .iter()
+                        .filter_map(|url| {
+                            if url.scheme() == "file" {
+                                // 解码 file:// URL 得到本地路径
+                                url.to_file_path().ok()
+                                    .map(|p| p.to_string_lossy().to_string())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+
+                    if paths.is_empty() { return; }
+
+                    // 将路径列表发送给前端
+                    let _ = handle.emit("dock-file-drop", paths);
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
