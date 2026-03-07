@@ -80,6 +80,8 @@ export default function App() {
   
   const [replicateCounts, setReplicateCounts] = useState<Record<string, number>>({});
   const [costQuantities, setCostQuantities] = useState<Record<string, number>>({});
+  const [costUnitPrices, setCostUnitPrices] = useState<Record<string, number>>({});
+  const [costRemarks, setCostRemarks] = useState<Record<string, string>>({});
   const [replicateLocked, setReplicateLocked] = useState(false);
 
   const [progress, setProgress] = useState<ProcessProgress>({
@@ -231,7 +233,7 @@ export default function App() {
   const selectAll = () => setImages(prev => prev.map(img => img.isSupported ? { ...img, selected: true } : img));
   const deselectAll = () => setImages(prev => prev.map(img => ({ ...img, selected: false })));
   
-  const clearAll = () => { setImages([]); setReplicateCounts({}); setCostQuantities({}); setReplicateLocked(false); };
+  const clearAll = () => { setImages([]); setReplicateCounts({}); setCostQuantities({}); setCostUnitPrices({}); setCostRemarks({}); setReplicateLocked(false); };
   const removeSelected = () => setImages(prev => prev.filter(img => !img.selected));
 
   const selectedImages = images.filter(img => img.selected && img.isSupported);
@@ -512,7 +514,7 @@ export default function App() {
     <div ref={containerRef} className="flex h-screen w-screen p-5 gap-3 bg-[#f3f4f6] text-gray-800 font-sans">
       <div className="flex-1 min-w-0">
         {activeTab === "cost" ? (
-          <ListImageView images={images} disabled={isProcessing} onToggleSelect={toggleSelect} onSelectAll={selectAll} onDeselectAll={deselectAll} onClearAll={clearAll} costQuantities={costQuantities} onUpdateCostQuantity={(path, qty) => setCostQuantities(prev => ({ ...prev, [path]: qty }))} onRemoveOne={(path) => { setImages(prev => prev.filter(img => img.path !== path)); setReplicateCounts(prev => { const c = { ...prev }; delete c[path]; return c; }); setCostQuantities(prev => { const c = { ...prev }; delete c[path]; return c; }); }} />
+          <ListImageView images={images} disabled={isProcessing} onToggleSelect={toggleSelect} onSelectAll={selectAll} onDeselectAll={deselectAll} onClearAll={clearAll} costQuantities={costQuantities} onUpdateCostQuantity={(path, qty) => setCostQuantities(prev => ({ ...prev, [path]: qty }))} costUnitPrices={costUnitPrices} onUpdateCostUnitPrice={(path, price) => setCostUnitPrices(prev => ({ ...prev, [path]: price }))} costRemarks={costRemarks} onUpdateCostRemark={(path, text) => setCostRemarks(prev => ({ ...prev, [path]: text }))} onRemoveOne={(path) => { setImages(prev => prev.filter(img => img.path !== path)); setReplicateCounts(prev => { const c = { ...prev }; delete c[path]; return c; }); setCostQuantities(prev => { const c = { ...prev }; delete c[path]; return c; }); setCostUnitPrices(prev => { const c = { ...prev }; delete c[path]; return c; }); setCostRemarks(prev => { const c = { ...prev }; delete c[path]; return c; }); }} />
         ) : (
           <ImageGrid 
             images={images} isDragging={isDragging} zoomWidth={zoomWidth} setZoomWidth={setZoomWidth}

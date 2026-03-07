@@ -386,6 +386,140 @@ fn rename_files(files_to_process: Vec<Vec<String>>) -> Result<Vec<(String, Strin
 }
 
 // ==========================================
+// 🌟 核心引擎 B.5：缩略图 Base64（供报价单 HTML 内嵌）
+// ==========================================
+#[tauri::command]
+fn get_thumbnail_base64(path_str: String) -> Result<String, String> {
+    let target_layer = format!("{}[0]", path_str);
+    let output = magick_command()
+        .args([&target_layer, "-background", "white", "-flatten", "-resize", "120x120>", "-strip", "jpeg:-"])
+        .output().map_err(|e| format!("引擎启动失败: {}", e))?;
+
+    if output.status.success() {
+        Ok(format!("data:image/jpeg;base64,{}", general_purpose::STANDARD.encode(&output.stdout)))
+    } else {
+        Err("生成缩略图失败".to_string())
+    }
+}
+
+// ==========================================
+// 🌟 核心引擎 E.5.5：HTML 转 PDF（调用系统 Chrome/Edge 无头）
+// ==========================================
+fn find_chrome_or_edge() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        let candidates = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        ];
+        for p in &candidates {
+            if Path::new(p).exists() {
+                return Some(std::path::PathBuf::from(p));
+            }
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let local = std::env::var("LOCALAPPDATA").ok();
+        let program_files = std::env::var("ProgramFiles").ok();
+        let program_files_x86 = std::env::var("ProgramFiles(x86)").ok();
+        let candidates = [
+            local.as_ref().map(|s| format!(r"{}\Google\Chrome\Application\chrome.exe", s)),
+            program_files.as_ref().map(|s| format!(r"{}\Google\Chrome\Application\chrome.exe", s)),
+            program_files_x86.as_ref().map(|s| format!(r"{}\Google\Chrome\Application\chrome.exe", s)),
+            program_files.as_ref().map(|s| format!(r"{}\Microsoft\Edge\Application\msedge.exe", s)),
+            local.as_ref().map(|s| format!(r"{}\Microsoft\Edge\Application\msedge.exe", s)),
+        ];
+        for opt in &candidates {
+            if let Some(ref p) = opt {
+                if Path::new(p).exists() {
+                    return Some(std::path::PathBuf::from(p));
+                }
+            }
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        // Linux 等：可在此扩展常见路径
+        let _ = ();
+    }
+    None
+}
+
+/// 将本地 HTML 文件用系统浏览器无头打印为 PDF。未找到 Chrome/Edge 时返回 Err。
+#[tauri::command]
+fn html_to_pdf(html_path: String, pdf_path: String) -> Result<String, String> {
+    let browser = find_chrome_or_edge().ok_or_else(|| "未找到 Chrome 或 Edge，请安装后重试".to_string())?;
+    let html = Path::new(&html_path);
+    if !html.exists() {
+        return Err("HTML 文件不存在".to_string());
+    }
+    let pdf = Path::new(&pdf_path);
+    let parent = pdf.parent().unwrap_or(Path::new("."));
+    let _ = std::fs::create_dir_all(parent);
+
+    let file_url = {
+        let abs = std::fs::canonicalize(html).map_err(|e| format!("路径无效: {}", e))?;
+        let s = abs.to_string_lossy();
+        #[cfg(target_os = "windows")]
+        let s = format!("file:///{}", s.replace('\\', "/"));
+        #[cfg(not(target_os = "windows"))]
+        let s = format!("file://{}", s);
+        s
+    };
+
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+    let mut cmd = std::process::Command::new(&browser);
+    cmd.arg("--headless")
+        .arg("--disable-gpu")
+        .arg("--no-pdf-header-footer")
+        .arg("--run-all-compositor-stages-before-draw")
+        .arg(format!("--print-to-pdf={}", pdf.display()));
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000);
+    cmd.arg(&file_url);
+    let out = cmd.output().map_err(|e| format!("启动浏览器失败: {}", e))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(format!("打印 PDF 失败: {}", stderr));
+    }
+    if !pdf.exists() {
+        return Err("未生成 PDF 文件".to_string());
+    }
+    Ok(pdf.to_string_lossy().to_string())
+}
+
+// ==========================================
+// 🌟 核心引擎 E.5：报价单导出（CSV/HTML 等）
+// ==========================================
+#[tauri::command]
+fn export_file(content: String, filename: String) -> Result<String, String> {
+    let desktop = dirs_next::desktop_dir()
+        .or_else(dirs_next::home_dir)
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let safe_name = filename
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == ' ' { c } else { '_' })
+        .collect::<String>();
+    let final_name = safe_name.trim().to_string();
+    let dest = desktop.join(if final_name.is_empty() { "export".into() } else { final_name });
+
+    let bytes: Vec<u8> = if dest.extension().map(|e| e.to_string_lossy().to_lowercase()) == Some("csv".into()) {
+        let mut b = vec![0xEF, 0xBB, 0xBF];
+        b.extend_from_slice(content.as_bytes());
+        b
+    } else {
+        content.into_bytes()
+    };
+    std::fs::write(&dest, &bytes).map_err(|e| format!("写入文件失败: {}", e))?;
+
+    Ok(dest.to_string_lossy().to_string())
+}
+
+// ==========================================
 // 🌟 核心引擎 E：图像多份复制裂变
 // ==========================================
 #[tauri::command]
@@ -460,7 +594,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            rename_files, get_image_size, get_image_meta, generate_thumbnail, process_image, replicate_image 
+            rename_files, get_image_size, get_image_meta, generate_thumbnail, get_thumbnail_base64, process_image, replicate_image, export_file, html_to_pdf
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
